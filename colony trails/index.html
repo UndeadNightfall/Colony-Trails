@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1b120b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Colony Trails" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Colony Trails — Top Down Prototype</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="app_icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="app_icon.png" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1b120b; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; touch-action: none; }
+    canvas { display: block; width: 100vw; height: 100vh; background: #2d1c10; }
+    .title-screen { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #130b06; }
+    .title-screen.hidden { display: none; }
+    .title-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .start-button { position: absolute; left: 50%; bottom: max(30px, env(safe-area-inset-bottom)); transform: translateX(-50%); min-width: 170px; min-height: 54px; padding: 0 24px; border: 1px solid rgba(76, 49, 27, 0.72); border-radius: 16px; color: #f7ecd7; background: linear-gradient(180deg, #6f5438 0%, #4d3624 100%); font-weight: 900; font-size: 18px; box-shadow: 0 10px 22px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 239, 204, 0.18); }
+    .load-button { position: absolute; left: 50%; bottom: max(94px, calc(env(safe-area-inset-bottom) + 64px)); transform: translateX(-50%); min-width: 150px; min-height: 44px; padding: 0 20px; border-radius: 16px; color: #f0e2c7; background: linear-gradient(180deg, rgba(60, 45, 31, 0.92), rgba(34, 24, 17, 0.92)); border: 1px solid rgba(118, 92, 61, 0.7); font-weight: 900; font-size: 15px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 239, 204, 0.14); }
+    .hud { position: fixed; left: 12px; top: 10px; z-index: 10; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #f4e7c9; font-weight: 800; font-size: 14px; }
+    .pill { padding: 8px 11px; border-radius: 14px; background: linear-gradient(180deg, rgba(52, 37, 24, 0.84), rgba(30, 21, 14, 0.86)); border: 1px solid rgba(124, 95, 64, 0.52); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); }
+    .save-button { padding: 8px 11px; border-radius: 14px; color: #f4e7c9; background: linear-gradient(180deg, rgba(64, 47, 31, 0.9), rgba(36, 25, 17, 0.92)); border: 1px solid rgba(124, 95, 64, 0.52); font-weight: 900; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); }
+    .pause-button { position: fixed; right: 12px; top: 10px; z-index: 11; min-width: 88px; height: 42px; padding: 0 16px; border-radius: 14px; color: #f6ead2; background: linear-gradient(180deg, rgba(74, 54, 35, 0.94), rgba(41, 29, 19, 0.96)); border: 1px solid rgba(136, 104, 72, 0.54); font-weight: 900; font-size: 15px; box-shadow: 0 7px 18px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 241, 210, 0.12); backdrop-filter: blur(5px); }
+    .objective { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10; width: min(540px, calc(100vw - 260px)); padding: 8px 12px; border-radius: 14px; color: #f4e7c9; text-align: center; font-weight: 800; font-size: 13px; background: linear-gradient(180deg, rgba(52, 37, 24, 0.8), rgba(26, 18, 13, 0.84)); border: 1px solid rgba(124, 95, 64, 0.52); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); pointer-events: none; }
+    .save-toast { position: fixed; left: 50%; top: 72px; transform: translateX(-50%); z-index: 90; min-width: 160px; padding: 10px 14px; border-radius: 14px; color: #f7ecd7; text-align: center; font-weight: 900; font-size: 14px; background: linear-gradient(180deg, rgba(74, 54, 35, 0.95), rgba(41, 29, 19, 0.96)); border: 1px solid rgba(136, 104, 72, 0.54); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 241, 210, 0.12); opacity: 0; pointer-events: none; transition: opacity 160ms ease, transform 160ms ease; }
+    .save-toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .save-toast.hidden { display: block; }
+    .pause-screen { position: fixed; inset: 0; z-index: 85; display: flex; align-items: center; justify-content: center; background: rgba(12, 7, 4, 0.76); backdrop-filter: blur(4px); }
+    .pause-screen.hidden { display: none; }
+    .pause-panel { display: flex; flex-direction: column; gap: 12px; width: min(260px, calc(100vw - 48px)); }
+    .pause-panel button { min-height: 50px; border: 1px solid rgba(136, 104, 72, 0.54); border-radius: 14px; color: #f6ead2; background: linear-gradient(180deg, rgba(74, 54, 35, 0.94), rgba(41, 29, 19, 0.96)); font-weight: 900; font-size: 16px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 241, 210, 0.12); }
+    .joystick { position: fixed; left: 20px; bottom: 20px; z-index: 20; width: 122px; height: 122px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, rgba(93, 67, 43, 0.26), rgba(34, 23, 16, 0.86)); border: 1px solid rgba(137, 104, 68, 0.45); box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.3); touch-action: none; }
+    .joystick::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; border: 1px solid rgba(255, 241, 210, 0.06); box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.22); }
+    .stick { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; border-radius: 50%; transform: translate(-50%, -50%); background: linear-gradient(180deg, #8b6640, #4e341f); border: 1px solid rgba(255, 241, 210, 0.12); box-shadow: 0 6px 12px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 241, 210, 0.1); }
+    .action-button { position: fixed; right: 22px; bottom: 24px; z-index: 20; min-width: 104px; height: 74px; padding: 0 16px; border: 1px solid rgba(136, 104, 72, 0.54); border-radius: 18px; color: #f6ead2; background: linear-gradient(180deg, rgba(74, 54, 35, 0.94), rgba(41, 29, 19, 0.96)); font-weight: 900; font-size: 16px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 241, 210, 0.12); }
+    .rotate-warning { display: none; position: fixed; inset: 0; z-index: 99; background: #1b100b; color: #ffe1a3; align-items: center; justify-content: center; text-align: center; padding: 28px; font-size: 22px; font-weight: 800; }
+    @media (orientation: portrait) { .rotate-warning { display: flex; } }
+  </style>
+</head>
+<body>
+  <div class="title-screen" id="titleScreen">
+    <img class="title-art" src="title_screen.png" alt="Colony Trails title screen" />
+    <button class="load-button" id="loadButton">Load</button>
+    <button class="start-button" id="startButton">Start</button>
+  </div>
+  <div class="pause-screen hidden" id="pauseScreen">
+    <div class="pause-panel">
+      <button id="resumeButton">Resume</button>
+      <button id="pauseSaveButton">Save</button>
+      <button id="pauseAutosaveButton">Autosave: On</button>
+      <button id="menuButton">Return to menu</button>
+    </div>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud">
+    <div class="pill">Colony Trails</div>
+    <div class="pill" id="roomDisplay">Room: Nest</div>
+    <div class="pill" id="foodDisplay">Food: 0</div>
+    <div class="pill" id="colonyDisplay">Colony: 1</div>
+    <div class="pill" id="healthDisplay">Health: 3</div>
+    <button class="save-button" id="musicButton">Music: On</button>
+    <button class="save-button" id="saveButton">Save</button>
+  </div>
+  <button class="pause-button" id="pauseButton" title="Pause">Pause</button>
+  <div class="save-toast" id="saveToast" aria-live="polite"></div>
+
+  <div class="objective" id="objectiveText">Leave the nest, find crumbs, and bring food back to the queen.</div>
+
+  <div class="joystick" id="joystick"><div class="stick" id="stick"></div></div>
+  <button class="action-button" id="actionButton">Find</button>
+  <div class="rotate-warning">Turn your phone sideways to play.</div>
+
+  <script src="js/state.js"></script>
+  <script src="js/collision.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/colony.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ants.js"></script>
+  <script src="js/spiders.js"></script>
+  <script src="js/nest.js"></script>
+  <script src="js/drawing.js"></script>
+  <script src="js/lifecycle.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/sfx.js"></script>
+  <script src="js/music.js"></script>
+  <script src="js/weather.js"></script>
+  <script src="js/title.js"></script>
+  <script src="js/pause.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

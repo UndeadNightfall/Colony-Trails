@@ -1,0 +1,19 @@
+{
+  "name": "Colony Trails",
+  "short_name": "Colony",
+  "description": "A mobile ant colony survival and growth game.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1b120b",
+  "theme_color": "#1b120b",
+  "icons": [
+    {
+      "src": "app_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
