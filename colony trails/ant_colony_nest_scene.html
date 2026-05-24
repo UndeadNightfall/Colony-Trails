@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1b120b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Colony Trails" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Colony Trails — Top Down Prototype</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="app_icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="app_icon.png" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1b120b; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; touch-action: none; }
+    canvas { display: block; width: 100vw; height: 100vh; background: #2d1c10; }
+    .title-screen { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #130b06; }
+    .title-screen.hidden { display: none; }
+    .title-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .start-button { position: absolute; left: 50%; bottom: max(30px, env(safe-area-inset-bottom)); transform: translateX(-50%); min-width: 170px; min-height: 54px; padding: 0 24px; border: 0; border-radius: 999px; color: #32190c; background: linear-gradient(#ffe29a, #d8933e); font-weight: 900; font-size: 18px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.38); }
+    .load-button { position: absolute; left: 50%; bottom: max(94px, calc(env(safe-area-inset-bottom) + 64px)); transform: translateX(-50%); min-width: 150px; min-height: 44px; padding: 0 20px; border-radius: 999px; color: #ffe6b7; background: rgba(18, 10, 6, 0.72); border: 1px solid rgba(255, 218, 150, 0.26); font-weight: 900; font-size: 15px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34); }
+    .hud { position: fixed; left: 12px; top: 10px; z-index: 10; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #ffe6b7; font-weight: 800; font-size: 14px; }
+    .pill { padding: 8px 11px; border-radius: 999px; background: rgba(18, 10, 6, 0.66); border: 1px solid rgba(255, 218, 150, 0.2); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22); backdrop-filter: blur(5px); }
+    .save-button { padding: 8px 11px; border-radius: 999px; color: #ffe6b7; background: rgba(18, 10, 6, 0.66); border: 1px solid rgba(255, 218, 150, 0.2); font-weight: 900; box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22); backdrop-filter: blur(5px); }
+    .objective { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10; width: min(540px, calc(100vw - 260px)); padding: 8px 12px; border-radius: 14px; color: #fff1ca; text-align: center; font-weight: 800; font-size: 13px; background: rgba(18, 10, 6, 0.58); border: 1px solid rgba(255, 218, 150, 0.2); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22); backdrop-filter: blur(5px); pointer-events: none; }
+    .joystick { position: fixed; left: 22px; bottom: 22px; z-index: 20; width: 118px; height: 118px; border-radius: 50%; background: rgba(255, 224, 169, 0.13); border: 2px solid rgba(255, 224, 169, 0.24); box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.28); touch-action: none; }
+    .stick { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; border-radius: 50%; transform: translate(-50%, -50%); background: linear-gradient(#ffd98b, #b97433); border: 2px solid rgba(48, 25, 11, 0.45); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32); }
+    .action-button { position: fixed; right: 22px; bottom: 28px; z-index: 20; width: 92px; height: 92px; border: 0; border-radius: 50%; color: #32190c; background: linear-gradient(#ffe29a, #d8933e); font-weight: 900; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32); }
+    .rotate-warning { display: none; position: fixed; inset: 0; z-index: 99; background: #1b100b; color: #ffe1a3; align-items: center; justify-content: center; text-align: center; padding: 28px; font-size: 22px; font-weight: 800; }
+    @media (orientation: portrait) { .rotate-warning { display: flex; } }
+  </style>
+</head>
+<body>
+  <div class="title-screen" id="titleScreen">
+    <img class="title-art" src="title_screen.png" alt="Colony Trails title screen" />
+    <button class="load-button" id="loadButton">Load</button>
+    <button class="start-button" id="startButton">Start</button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud">
+    <div class="pill">Colony Trails</div>
+    <div class="pill" id="roomDisplay">Room: Nest</div>
+    <div class="pill" id="foodDisplay">Food: 0</div>
+    <div class="pill" id="colonyDisplay">Colony: 1</div>
+    <div class="pill" id="healthDisplay">Health: 3</div>
+    <button class="save-button" id="saveButton">Save</button>
+  </div>
+
+  <div class="objective" id="objectiveText">Leave the nest, find crumbs, and bring food back to the queen.</div>
+
+  <div class="joystick" id="joystick"><div class="stick" id="stick"></div></div>
+  <button class="action-button" id="actionButton">Find</button>
+  <div class="rotate-warning">Turn your phone sideways to play.</div>
+
+  <script src="js/state.js"></script>
+  <script src="js/collision.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/colony.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ants.js"></script>
+  <script src="js/spiders.js"></script>
+  <script src="js/nest.js"></script>
+  <script src="js/drawing.js"></script>
+  <script src="js/lifecycle.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/title.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
