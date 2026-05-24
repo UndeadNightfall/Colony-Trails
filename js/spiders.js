@@ -5,6 +5,8 @@
           if (spider.respawnTimer <= 0) respawnSpider(spider);
           continue;
         }
+        const oldX = spider.x;
+        const oldY = spider.y;
         const sameRoomAsPlayer = spider.roomId === player.roomId;
         const playerProtected = sameRoomAsPlayer && typeof isOnSafeTrail === "function" && isOnSafeTrail(player, player.radius);
         const dToPlayer = sameRoomAsPlayer ? distance(spider, player) : Infinity;
@@ -53,6 +55,11 @@
           else spider.angle += Math.sin(performance.now() / 900 + spider.homeX) * 0.018;
           spider.x += Math.cos(spider.angle) * spider.speed * 0.62 * delta;
           spider.y += Math.sin(spider.angle) * spider.speed * 0.62 * delta;
+        }
+        if (preventSpiderTrailCrossing(spider, oldX, oldY)) {
+          spider.x = oldX;
+          spider.y = oldY;
+          spider.angle += Math.PI * 0.85;
         }
         if (typeof keepSpiderOffSafeTrails === "function") keepSpiderOffSafeTrails(spider);
         resolveOverworldObstructions(spider);
@@ -129,6 +136,15 @@
         }
       }
       return nearest;
+    }
+
+    function preventSpiderTrailCrossing(spider, oldX, oldY) {
+      if (!isOutdoorRoom(spider.roomId) || typeof getNearestSafeTrailPoint !== "function") return false;
+      const before = getNearestSafeTrailPoint(spider.roomId, oldX, oldY);
+      const after = getNearestSafeTrailPoint(spider.roomId, spider.x, spider.y);
+      if (!before || !after) return false;
+      const limit = getSafeTrailRadius() + spider.radius + 18;
+      return before.distance > limit && after.distance <= limit;
     }
 
     function drawSpiders() {

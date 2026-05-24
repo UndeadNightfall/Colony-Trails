@@ -3,6 +3,8 @@
     var roomDisplay = document.getElementById("roomDisplay");
     var foodDisplay = document.getElementById("foodDisplay");
     var colonyDisplay = document.getElementById("colonyDisplay");
+    var colonyPanel = document.getElementById("colonyPanel");
+    var colonyDropdown = document.getElementById("colonyDropdown");
     var healthDisplay = document.getElementById("healthDisplay");
     var musicButton = document.getElementById("musicButton");
     var objectiveText = document.getElementById("objectiveText");
@@ -74,6 +76,7 @@
     var deadAnts = [];
     var combatEffects = [];
     var grassClumps = [];
+    var seasonFlowers = [];
     var pebbles = [];
     var foodSpawn = {
       timer: 0,
@@ -104,13 +107,13 @@
       { roomId: "sandpit", type: "rect", name: "timber sleeper", x: 1196, y: 105, width: 34, height: 690, radius: 14, color: "#7b4a28" },
       { roomId: "sandpit", type: "circle", name: "bucket", x: 360, y: 360, radius: 44, color: "#d6613b" },
       { roomId: "sandpit", type: "rect", name: "toy spade", x: 790, y: 515, width: 190, height: 26, radius: 12, color: "#437ab0" },
-      { roomId: "overworld", type: "rect", name: "fallen rake", x: 600, y: 565, width: 260, height: 24, radius: 10, color: "#8d6841" },
+      { roomId: "overworld", type: "rect", name: "fallen rake", solid: false, x: 610, y: 568, width: 220, height: 12, radius: 8, color: "#8d6841" },
       { roomId: "overworld", type: "rect", name: "fence board", x: 1360, y: 720, width: 250, height: 44, radius: 12, color: "#8a5b36" },
       { roomId: "overworld", type: "circle", name: "garden light", x: 970, y: 640, radius: 26, color: "#7f8a75" },
       { roomId: "garden", type: "circle", name: "plant pot", x: 350, y: 360, radius: 54, color: "#9a5734" },
       { roomId: "garden", type: "circle", name: "plant pot", x: 920, y: 570, radius: 48, color: "#9a5734" },
       { roomId: "garden", type: "rect", name: "fence board", x: 150, y: 800, width: 360, height: 44, radius: 12, color: "#8a5b36" },
-      { roomId: "garden", type: "rect", name: "fallen rake", x: 970, y: 270, width: 250, height: 24, radius: 10, color: "#8d6841" }
+      { roomId: "garden", type: "rect", name: "fallen rake", solid: false, x: 980, y: 273, width: 210, height: 12, radius: 8, color: "#8d6841" }
     ];
 
     var lastTime = performance.now();
@@ -128,12 +131,78 @@
       cleanupPriority: false,
       killCount: 0
     };
+    var seasonState = {
+      order: ["summer", "autumn", "winter", "spring"],
+      currentIndex: 0,
+      pendingIndex: null,
+      elapsed: 0,
+      duration: 900,
+      beesSeed: Math.random() * Math.PI * 2
+    };
     var defenseCall = {
       active: false,
       targetSpiderId: null,
       timeLeft: 0,
       lastCallAt: -10
     };
+    var colonyDropdownOpen = false;
+
+    function getColonyRoleCounts() {
+      var roles = colony.roles || {};
+      return {
+        worker: roles.worker || 0,
+        soldier: roles.soldier || 0,
+        nurse: roles.nurse || 0,
+        middenworker: roles.middenworker || 0
+      };
+    }
+
+    function updateColonyDropdown() {
+      if (!colonyDropdown) return;
+      var counts = getColonyRoleCounts();
+      colonyDropdown.innerHTML = `
+        <div class="dropdown-title">Ant breakdown</div>
+        <div class="dropdown-row"><span>Total</span><span>${colony.ants}</span></div>
+        <div class="dropdown-row"><span>Workers</span><span>${counts.worker}</span></div>
+        <div class="dropdown-row"><span>Soldiers</span><span>${counts.soldier}</span></div>
+        <div class="dropdown-row"><span>Nurses</span><span>${counts.nurse}</span></div>
+        <div class="dropdown-row"><span>Midden workers</span><span>${counts.middenworker}</span></div>
+      `;
+    }
+
+    function showColonyDropdown() {
+      if (!colonyDropdown) return;
+      updateColonyDropdown();
+      colonyDropdown.classList.remove("hidden");
+      colonyDropdown.setAttribute("aria-hidden", "false");
+      colonyDropdownOpen = true;
+    }
+
+    function hideColonyDropdown() {
+      if (!colonyDropdown) return;
+      colonyDropdown.classList.add("hidden");
+      colonyDropdown.setAttribute("aria-hidden", "true");
+      colonyDropdownOpen = false;
+    }
+
+    function toggleColonyDropdown() {
+      if (colonyDropdownOpen) hideColonyDropdown();
+      else showColonyDropdown();
+    }
+
+    if (colonyDisplay) {
+      colonyDisplay.addEventListener("pointerup", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleColonyDropdown();
+      });
+    }
+
+    document.addEventListener("pointerdown", event => {
+      if (!colonyDropdownOpen) return;
+      if (colonyPanel && colonyPanel.contains(event.target)) return;
+      hideColonyDropdown();
+    });
 
     function resetGameState() {
       world.room = rooms.nest;
@@ -159,6 +228,7 @@
         recoveredDead: 0,
         excavation: { active: false, targetStage: 4, progress: 0, duration: 0 }
       });
+      if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
       crumbs.length = 0;
       helpers.length = 0;
       spiders.length = 0;
@@ -170,6 +240,7 @@
       resetWeatherState();
       resetDefenseCall();
       nextAntId = 1;
+      if (typeof resetSeasonState === "function") resetSeasonState();
       stopRainSound();
       gamePaused = false;
       lastTime = performance.now();

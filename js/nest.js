@@ -77,6 +77,7 @@
       drawNurseryContents();
       drawMiddenChamberContents();
       drawQueen(queen.x, queen.y, 1.15);
+      drawPendingQueenEggs();
       drawExit(exits.nestToOverworld.x, exits.nestToOverworld.y, exits.nestToOverworld.radius, "Exit");
     }
 
@@ -85,7 +86,6 @@
       ctx.beginPath();
       ctx.ellipse(nursery.x, nursery.y, nursery.rx * 0.72, nursery.ry * 0.58, -0.12, 0, Math.PI * 2);
       ctx.fill();
-      drawPendingQueenEggs();
       if (colony.eggs.length <= 0) return;
       ctx.fillStyle = "#f7dfaa";
       const nurseryEggs = colony.eggs.filter(egg => egg.inNursery);
@@ -95,10 +95,11 @@
         ctx.fill();
       }
       if (nurseryEggs.length > 0) drawText(`${Math.ceil(nurseryEggs[0].time)}s ${nurseryEggs[0].role}`, nursery.x, nursery.y + nursery.ry + 28);
+      drawNurseryFussEffects(nurseryEggs);
     }
 
     function drawPendingQueenEggs() {
-      const pendingEggs = colony.eggs.filter(egg => !egg.inNursery);
+      const pendingEggs = colony.eggs.filter(egg => !egg.inNursery && !egg.carriedBy);
       if (pendingEggs.length === 0) return;
       ctx.fillStyle = "#f7dfaa";
       for (const egg of pendingEggs) {
@@ -119,6 +120,96 @@
         ctx.ellipse(midden.x + 10, midden.y - 6, 18, 10, -0.22, 0, Math.PI * 2);
         ctx.fill();
       }
+      drawMiddenFussEffects();
+    }
+
+    function drawNurseryFussEffects(nurseryEggs) {
+      const nurses = helpers.filter(ant => !ant.dead && ant.roomId === "nest" && ant.role === "nurse" && ant.job === "nursing");
+      if (nurses.length === 0 || nurseryEggs.length === 0) return;
+      ctx.save();
+      for (const egg of nurseryEggs) {
+        const nurse = nurses.reduce((best, ant) => !best || distance(ant, egg) < distance(best, egg) ? ant : best, null);
+        const pulse = 1 + Math.sin(performance.now() / 180 + egg.x * 0.01) * 0.12;
+        ctx.strokeStyle = "rgba(255, 231, 168, 0.42)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(egg.x, egg.y, 24 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        if (nurse) {
+          ctx.strokeStyle = "rgba(255, 225, 160, 0.22)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(nurse.x, nurse.y);
+          ctx.lineTo(egg.x, egg.y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(255, 244, 205, 0.78)";
+        for (let i = 0; i < 4; i++) {
+          const a = performance.now() / 500 + i * (Math.PI / 2);
+          ctx.beginPath();
+          ctx.arc(egg.x + Math.cos(a) * 18, egg.y + Math.sin(a) * 12, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawMiddenFussEffects() {
+      const workers = helpers.filter(ant => !ant.dead && ant.roomId === "nest" && ant.role === "middenworker" && (ant.job === "healing_midden" || ant.job === "cleaning_midden" || ant.job === "waiting_midden" || ant.job === "fussing_player"));
+      if (workers.length === 0) return;
+      const sickTargets = helpers.filter(ant => !ant.dead && ant.roomId === "nest" && ant.sick && ant.atMidden);
+      const corpses = deadAnts.filter(corpse => corpse.roomId === "nest" && corpse.atMidden && !corpse.carried);
+      if (sickTargets.length === 0 && corpses.length === 0) return;
+      ctx.save();
+      for (const sick of sickTargets) {
+        const worker = workers.reduce((best, ant) => !best || distance(ant, sick) < distance(best, sick) ? ant : best, null);
+        const pulse = 1 + Math.sin(performance.now() / 160 + sick.x * 0.02) * 0.12;
+        ctx.strokeStyle = "rgba(140, 230, 132, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sick.x, sick.y, 22 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        if (worker) {
+          ctx.strokeStyle = "rgba(140, 230, 132, 0.2)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(worker.x, worker.y);
+          ctx.lineTo(sick.x, sick.y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(180, 245, 170, 0.7)";
+        for (let i = 0; i < 3; i++) {
+          const a = performance.now() / 430 + i * (Math.PI * 2 / 3);
+          ctx.beginPath();
+          ctx.arc(sick.x + Math.cos(a) * 16, sick.y + Math.sin(a) * 11, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      for (const corpse of corpses) {
+        const worker = workers.reduce((best, ant) => !best || distance(ant, corpse) < distance(best, corpse) ? ant : best, null);
+        const pulse = 1 + Math.sin(performance.now() / 140 + corpse.x * 0.02) * 0.12;
+        ctx.strokeStyle = "rgba(216, 190, 152, 0.38)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(corpse.x, corpse.y, 20 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        if (worker) {
+          ctx.strokeStyle = "rgba(216, 190, 152, 0.18)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(worker.x, worker.y);
+          ctx.lineTo(corpse.x, corpse.y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(230, 214, 186, 0.56)";
+        for (let i = 0; i < 4; i++) {
+          const a = performance.now() / 510 + i * (Math.PI / 2);
+          ctx.beginPath();
+          ctx.arc(corpse.x + Math.cos(a) * 14, corpse.y + Math.sin(a) * 10, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     }
 
     function drawChamber(x, y, rx, ry, angle, fill, label) {
@@ -174,6 +265,44 @@
       return blocked;
     }
 
+    function recoverNestEntityPosition(entity, oldX, oldY) {
+      if (!entity || entity.roomId !== "nest") return null;
+      const routePoint = getNearestNestRoutePoint(entity.x, entity.y);
+      const safeSpot = findNearestNestSafeSpot(entity, oldX ?? entity.x, oldY ?? entity.y);
+      const prefersRoute = entity.role === "worker" && !entity.carrying && (
+        entity.job === "leaving_nest" ||
+        entity.job === "exploring" ||
+        entity.job === "roaming" ||
+        entity.job === "returning_home" ||
+        entity.job === "retreating"
+      );
+      if (prefersRoute && routePoint) {
+        entity.x = routePoint.x;
+        entity.y = routePoint.y;
+        return routePoint;
+      }
+      const routeScore = routePoint ? routePoint.distance : Infinity;
+      const safeScore = safeSpot ? Math.hypot(safeSpot.x - entity.x, safeSpot.y - entity.y) : Infinity;
+      const chosen = routePoint && routeScore <= safeScore ? routePoint : safeSpot;
+      if (!chosen) return null;
+      entity.x = chosen.x;
+      entity.y = chosen.y;
+      return chosen;
+    }
+
+    function getNestRecoverySpawnPoint(entity) {
+      const routes = getNestTunnelRoutes();
+      if (routes.length === 0) return null;
+      const route = routes[0];
+      if (!route || !Array.isArray(route.points) || route.points.length < 3) return null;
+      const a = route.points[1];
+      const b = route.points[2];
+      const candidate = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (isNestWalkable(candidate.x, candidate.y, entity?.radius || 10)) return candidate;
+      const routePoint = getNearestNestRoutePoint(candidate.x, candidate.y);
+      return routePoint ? { x: routePoint.x, y: routePoint.y } : null;
+    }
+
     function findNearestNestSafeSpot(entity, oldX, oldY) {
       const anchors = [
         { x: oldX, y: oldY },
@@ -195,6 +324,23 @@
               bestScore = score;
               best = candidate;
             }
+          }
+        }
+      }
+      return best;
+    }
+
+    function getNearestNestRoutePoint(x, y) {
+      const routes = getNestTunnelRoutes();
+      let best = null;
+      for (const route of routes) {
+        for (let i = 0; i < route.points.length - 1; i++) {
+          const a = route.points[i];
+          const b = route.points[i + 1];
+          const point = getNearestPointOnSegment(x, y, a, b);
+          const distanceToPoint = Math.hypot(point.x - x, point.y - y);
+          if (!best || distanceToPoint < best.distance) {
+            best = { x: point.x, y: point.y, distance: distanceToPoint };
           }
         }
       }
@@ -239,4 +385,12 @@
       const px = ax + vx * t;
       const py = ay + vy * t;
       return Math.hypot(x - px, y - py) <= width / 2;
+    }
+
+    function getNearestPointOnSegment(x, y, a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lengthSq = dx * dx + dy * dy;
+      const t = lengthSq === 0 ? 0 : clamp(((x - a.x) * dx + (y - a.y) * dy) / lengthSq, 0, 1);
+      return { x: a.x + dx * t, y: a.y + dy * t };
     }

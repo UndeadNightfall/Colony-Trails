@@ -6,6 +6,7 @@
       ctx.translate(-world.cameraX, -world.cameraY);
       if (player.roomId === "nest") { drawNestRoomGround(); drawNestRoom(); }
       else { drawGround(); drawDecorations(); drawSafeTrails(); drawRoomExits(); drawCrumbs(); drawObstructions(); drawSpiders(); }
+      drawSeasonOverlay();
       drawSoldierAwareness();
       drawCombatEffects();
       drawDeadAnts();
@@ -17,9 +18,13 @@
     function drawRakeDetails(item) {
       ctx.strokeStyle = "#4b3523";
       ctx.lineWidth = 3;
-      for (let x = item.x + item.width - 62; x < item.x + item.width - 12; x += 10) { ctx.beginPath(); ctx.moveTo(x, item.y + 2); ctx.lineTo(x - 6, item.y - 28); ctx.stroke(); }
+      ctx.beginPath();
+      ctx.moveTo(item.x + 16, item.y + item.height / 2);
+      ctx.lineTo(item.x + item.width - 18, item.y + item.height / 2);
+      ctx.stroke();
+      for (let x = item.x + item.width - 34; x < item.x + item.width - 10; x += 8) { ctx.beginPath(); ctx.moveTo(x, item.y + item.height / 2); ctx.lineTo(x - 3, item.y + item.height / 2 - 10); ctx.stroke(); }
       ctx.fillStyle = "#b99259";
-      roundRect(item.x - 62, item.y + 6, 86, 10, 5);
+      roundRect(item.x - 54, item.y + 4, 72, 8, 4);
       ctx.fill();
     }
 
@@ -432,6 +437,32 @@
         ctx.moveTo(-size * 1.2, size * 0.04 - pulse * 0.1);
         ctx.lineTo(-size * 1.6, size * 0.12);
         ctx.stroke();
+      } else if (role === "nurse" && job === "nursing") {
+        ctx.strokeStyle = "rgba(255, 226, 163, 0.38)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(-size * 1.1, 0, size * 0.95, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 241, 195, 0.7)";
+        for (let i = 0; i < 3; i++) {
+          const a = performance.now() / 420 + i * (Math.PI * 2 / 3);
+          ctx.beginPath();
+          ctx.arc(-size * 1.15 + Math.cos(a) * 7, Math.sin(a) * 4, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (role === "middenworker" && (job === "cleaning_midden" || job === "healing_midden" || job === "waiting_midden" || job === "fussing_player")) {
+        ctx.strokeStyle = "rgba(162, 230, 142, 0.32)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(-size * 1.08, 0, size * 0.92, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(182, 242, 172, 0.68)";
+        for (let i = 0; i < 4; i++) {
+          const a = performance.now() / 360 + i * (Math.PI / 2);
+          ctx.beginPath();
+          ctx.arc(-size * 1.12 + Math.cos(a) * 6, Math.sin(a) * 4, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       if (job === "resting") {
         ctx.save();

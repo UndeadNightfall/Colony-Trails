@@ -23,6 +23,13 @@
     .load-button { position: absolute; left: 50%; bottom: max(94px, calc(env(safe-area-inset-bottom) + 64px)); transform: translateX(-50%); min-width: 150px; min-height: 44px; padding: 0 20px; border-radius: 16px; color: #f0e2c7; background: linear-gradient(180deg, rgba(60, 45, 31, 0.92), rgba(34, 24, 17, 0.92)); border: 1px solid rgba(118, 92, 61, 0.7); font-weight: 900; font-size: 15px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 239, 204, 0.14); }
     .hud { position: fixed; left: 12px; top: 10px; z-index: 10; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #f4e7c9; font-weight: 800; font-size: 14px; }
     .pill { padding: 8px 11px; border-radius: 14px; background: linear-gradient(180deg, rgba(52, 37, 24, 0.84), rgba(30, 21, 14, 0.86)); border: 1px solid rgba(124, 95, 64, 0.52); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); }
+    .colony-panel { position: relative; }
+    .colony-pill { cursor: pointer; }
+    .colony-dropdown { position: absolute; left: 0; top: calc(100% + 8px); min-width: 180px; padding: 10px 12px; border-radius: 14px; background: linear-gradient(180deg, rgba(40, 28, 19, 0.96), rgba(22, 15, 10, 0.98)); border: 1px solid rgba(124, 95, 64, 0.52); box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); z-index: 18; color: #f4e7c9; }
+    .colony-dropdown.hidden { display: none; }
+    .colony-dropdown .dropdown-title { margin-bottom: 8px; font-size: 12px; letter-spacing: 0.02em; opacity: 0.85; }
+    .colony-dropdown .dropdown-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; line-height: 1.45; }
+    .colony-dropdown .dropdown-row + .dropdown-row { margin-top: 4px; }
     .save-button { padding: 8px 11px; border-radius: 14px; color: #f4e7c9; background: linear-gradient(180deg, rgba(64, 47, 31, 0.9), rgba(36, 25, 17, 0.92)); border: 1px solid rgba(124, 95, 64, 0.52); font-weight: 900; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); }
     .pause-button { position: fixed; right: 12px; top: 10px; z-index: 11; min-width: 88px; height: 42px; padding: 0 16px; border-radius: 14px; color: #f6ead2; background: linear-gradient(180deg, rgba(74, 54, 35, 0.94), rgba(41, 29, 19, 0.96)); border: 1px solid rgba(136, 104, 72, 0.54); font-weight: 900; font-size: 15px; box-shadow: 0 7px 18px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 241, 210, 0.12); backdrop-filter: blur(5px); }
     .objective { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10; width: min(540px, calc(100vw - 260px)); padding: 8px 12px; border-radius: 14px; color: #f4e7c9; text-align: center; font-weight: 800; font-size: 13px; background: linear-gradient(180deg, rgba(52, 37, 24, 0.8), rgba(26, 18, 13, 0.84)); border: 1px solid rgba(124, 95, 64, 0.52); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 241, 210, 0.08); backdrop-filter: blur(5px); pointer-events: none; }
@@ -32,6 +39,19 @@
     .pause-screen { position: fixed; inset: 0; z-index: 85; display: flex; align-items: center; justify-content: center; background: rgba(12, 7, 4, 0.76); backdrop-filter: blur(4px); }
     .pause-screen.hidden { display: none; }
     .pause-panel { display: flex; flex-direction: column; gap: 12px; width: min(260px, calc(100vw - 48px)); }
+    .season-countdown {
+      padding: 2px 0 6px;
+      color: #ffffff;
+      text-align: center;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1.35;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
     .pause-panel button { min-height: 50px; border: 1px solid rgba(136, 104, 72, 0.54); border-radius: 14px; color: #f6ead2; background: linear-gradient(180deg, rgba(74, 54, 35, 0.94), rgba(41, 29, 19, 0.96)); font-weight: 900; font-size: 16px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 241, 210, 0.12); }
     .joystick { position: fixed; left: 20px; bottom: 20px; z-index: 20; width: 122px; height: 122px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, rgba(93, 67, 43, 0.26), rgba(34, 23, 16, 0.86)); border: 1px solid rgba(137, 104, 68, 0.45); box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.42), 0 8px 18px rgba(0, 0, 0, 0.3); touch-action: none; }
     .joystick::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; border: 1px solid rgba(255, 241, 210, 0.06); box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.22); }
@@ -49,6 +69,7 @@
   </div>
   <div class="pause-screen hidden" id="pauseScreen">
     <div class="pause-panel">
+      <div class="season-countdown" id="pauseSeasonCountdown">Season: Summer | Next change in 15:00</div>
       <button id="resumeButton">Resume</button>
       <button id="pauseSaveButton">Save</button>
       <button id="pauseAutosaveButton">Autosave: On</button>
@@ -61,10 +82,12 @@
     <div class="pill">Colony Trails</div>
     <div class="pill" id="roomDisplay">Room: Nest</div>
     <div class="pill" id="foodDisplay">Food: 0</div>
-    <div class="pill" id="colonyDisplay">Colony: 1</div>
+    <div class="colony-panel" id="colonyPanel">
+      <div class="pill colony-pill" id="colonyDisplay">Colony: 1</div>
+      <div class="colony-dropdown hidden" id="colonyDropdown" aria-hidden="true"></div>
+    </div>
     <div class="pill" id="healthDisplay">Health: 3</div>
     <button class="save-button" id="musicButton">Music: On</button>
-    <button class="save-button" id="saveButton">Save</button>
   </div>
   <button class="pause-button" id="pauseButton" title="Pause">Pause</button>
   <div class="save-toast" id="saveToast" aria-live="polite"></div>

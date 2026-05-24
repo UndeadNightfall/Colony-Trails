@@ -1,9 +1,21 @@
     function generateMapDecorations() {
       grassClumps.length = 0;
+      seasonFlowers.length = 0;
       pebbles.length = 0;
       for (const roomId of ["overworld", "garden"]) {
         const room = rooms[roomId];
         for (let i = 0; i < 70; i++) grassClumps.push({ roomId, x: randomBetween(80, room.width - 80), y: randomBetween(110, room.height - 80), size: randomBetween(18, 44), sway: randomBetween(0, Math.PI * 2) });
+      }
+      for (const roomId of ["overworld", "garden"]) {
+        const room = rooms[roomId];
+        for (let i = 0; i < 28; i++) seasonFlowers.push({
+          roomId,
+          x: randomBetween(90, room.width - 90),
+          y: randomBetween(95, room.height - 95),
+          size: randomBetween(0.7, 1.2),
+          hue: roomId === "garden" ? randomBetween(25, 55) : randomBetween(30, 70),
+          sway: randomBetween(0, Math.PI * 2)
+        });
       }
       for (const roomId of ["overworld", "patio", "sandpit", "garden"]) {
         const room = rooms[roomId];
@@ -90,12 +102,18 @@
     function handleRoomTransitions(entity) {
       for (const exit of getRoomExits(entity.roomId)) {
         if (distance(entity, exit) >= exit.radius + entity.radius) continue;
+        if (entity !== player && weather.active && entity.roomId === "nest" && exit.to !== "nest") {
+          entity.x = clamp(entity.x, 80, rooms.nest.width - 80);
+          entity.y = clamp(entity.y, 80, rooms.nest.height - 80);
+          return;
+        }
         entity.roomId = exit.to;
         entity.x = exit.toX;
         entity.y = exit.toY;
         if (entity === player) {
           world.room = rooms[entity.roomId];
           objectiveText.textContent = getRoomObjective(entity.roomId);
+          if (entity.roomId === "nest" && typeof commitSeasonTransition === "function") commitSeasonTransition();
         }
         return;
       }
@@ -119,16 +137,20 @@
     }
 
     function drawBackyardGround(room) {
-      ctx.fillStyle = "#5d7f35";
+      const palette = getSeasonPalette();
+      ctx.fillStyle = palette.backyard;
       ctx.fillRect(0, 0, room.width, room.height);
-      ctx.fillStyle = "rgba(88, 58, 34, 0.2)";
+      if ((seasonState.order[seasonState.currentIndex] || "summer") === "autumn") drawAutumnLeafTexture(room);
+      ctx.fillStyle = palette.backyardVein;
       for (let y = 0; y < room.height; y += 70) for (let x = 0; x < room.width; x += 85) if ((x + y) % 3 === 0) { ctx.beginPath(); ctx.ellipse(x + 20, y + 30, 34, 17, 0.3, 0, Math.PI * 2); ctx.fill(); }
     }
 
     function drawPatioGround(room) {
-      ctx.fillStyle = "#9a9a90";
+      const palette = getSeasonPalette();
+      ctx.fillStyle = palette.patio;
       ctx.fillRect(0, 0, room.width, room.height);
-      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      if ((seasonState.order[seasonState.currentIndex] || "summer") === "autumn") drawAutumnLeafTexture(room);
+      ctx.strokeStyle = palette.patioLines;
       ctx.lineWidth = 2;
       for (let x = 90; x < room.width; x += 95) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - 28, room.height); ctx.stroke(); }
       for (let y = 82; y < room.height; y += 82) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(room.width, y); ctx.stroke(); }
@@ -155,31 +177,257 @@
     }
 
     function drawSandpitGround(room) {
-      ctx.fillStyle = "#d7b26b";
+      const palette = getSeasonPalette();
+      ctx.fillStyle = palette.sand;
       ctx.fillRect(0, 0, room.width, room.height);
-      ctx.fillStyle = "rgba(122, 83, 42, 0.16)";
+      if ((seasonState.order[seasonState.currentIndex] || "summer") === "autumn") drawAutumnLeafTexture(room);
+      ctx.fillStyle = palette.sandSpeckle;
       for (let i = 0; i < 90; i++) { ctx.beginPath(); ctx.arc(24 + (i * 67) % (room.width - 48), 22 + (i * 43) % (room.height - 44), 2 + (i % 3), 0, Math.PI * 2); ctx.fill(); }
     }
 
     function drawGardenGround(room) {
-      ctx.fillStyle = "#4f3324";
+      const palette = getSeasonPalette();
+      ctx.fillStyle = palette.garden;
       ctx.fillRect(0, 0, room.width, room.height);
-      ctx.fillStyle = "rgba(104, 70, 44, 0.55)";
-      ctx.strokeStyle = "rgba(104, 70, 44, 0.55)";
+      if ((seasonState.order[seasonState.currentIndex] || "summer") === "autumn") drawAutumnLeafTexture(room);
+      ctx.fillStyle = palette.gardenVein;
+      ctx.strokeStyle = palette.gardenVein;
       ctx.lineWidth = 8;
       for (let y = 40; y < room.height; y += 42) { ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(room.width - 30, y - 18); ctx.stroke(); }
     }
     function drawDecorations() {
       for (const grass of grassClumps) {
         if (grass.roomId !== player.roomId) continue;
-        ctx.save(); ctx.translate(grass.x, grass.y); ctx.rotate(Math.sin(performance.now() / 900 + grass.sway) * 0.08); ctx.fillStyle = "#416d2d";
+        ctx.save(); ctx.translate(grass.x, grass.y); ctx.rotate(Math.sin(performance.now() / 900 + grass.sway) * 0.08); ctx.fillStyle = getSeasonDecorationGrassColor();
         for (let i = 0; i < 5; i++) { ctx.rotate((Math.PI * 2) / 5); ctx.beginPath(); ctx.ellipse(0, -grass.size * 0.45, grass.size * 0.11, grass.size * 0.48, 0, 0, Math.PI * 2); ctx.fill(); }
         ctx.restore();
       }
+      if (seasonState.order[seasonState.currentIndex] === "spring") drawSpringFlowers();
       for (const pebble of pebbles) {
         if (pebble.roomId !== player.roomId) continue;
-        ctx.save(); ctx.translate(pebble.x, pebble.y); ctx.rotate(pebble.angle); ctx.fillStyle = "#8a745c"; ctx.beginPath(); ctx.ellipse(0, 0, pebble.rx, pebble.ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.translate(pebble.x, pebble.y); ctx.rotate(pebble.angle); ctx.fillStyle = getSeasonPebbleColor(); ctx.beginPath(); ctx.ellipse(0, 0, pebble.rx, pebble.ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
+    }
+
+    function getSeasonPalette() {
+      const season = seasonState.order[seasonState.currentIndex] || "summer";
+      if (season === "autumn") {
+        return {
+          backyard: "#8c6a2a",
+          backyardVein: "rgba(145, 96, 40, 0.24)",
+          patio: "#a38d70",
+          patioLines: "rgba(255, 226, 180, 0.12)",
+          sand: "#d3a55d",
+          sandSpeckle: "rgba(130, 86, 36, 0.18)",
+          garden: "#6a472b",
+          gardenVein: "rgba(145, 98, 56, 0.52)"
+        };
+      }
+      if (season === "winter") {
+        return {
+          backyard: "#dce9f6",
+          backyardVein: "rgba(255, 255, 255, 0.18)",
+          patio: "#d4dde7",
+          patioLines: "rgba(255, 255, 255, 0.2)",
+          sand: "#e7eef7",
+          sandSpeckle: "rgba(190, 206, 224, 0.22)",
+          garden: "#d5e2ef",
+          gardenVein: "rgba(176, 197, 216, 0.54)"
+        };
+      }
+      if (season === "spring") {
+        return {
+          backyard: "#618540",
+          backyardVein: "rgba(95, 126, 70, 0.2)",
+          patio: "#9f9e92",
+          patioLines: "rgba(255, 255, 255, 0.15)",
+          sand: "#d7b86f",
+          sandSpeckle: "rgba(126, 94, 54, 0.16)",
+          garden: "#44642d",
+          gardenVein: "rgba(95, 132, 69, 0.56)"
+        };
+      }
+      return {
+        backyard: "#5d7f35",
+        backyardVein: "rgba(88, 58, 34, 0.2)",
+        patio: "#9a9a90",
+        patioLines: "rgba(255, 255, 255, 0.15)",
+        sand: "#d7b26b",
+        sandSpeckle: "rgba(122, 83, 42, 0.16)",
+        garden: "#4f3324",
+        gardenVein: "rgba(104, 70, 44, 0.55)"
+      };
+    }
+
+    function getSeasonDecorationGrassColor() {
+      const season = seasonState.order[seasonState.currentIndex] || "summer";
+      if (season === "autumn") return "#9d6f2c";
+      if (season === "winter") return "#e9f2fb";
+      if (season === "spring") return "#4d8637";
+      return "#416d2d";
+    }
+
+    function getSeasonPebbleColor() {
+      const season = seasonState.order[seasonState.currentIndex] || "summer";
+      if (season === "autumn") return "#a07f52";
+      if (season === "winter") return "#c8d6e5";
+      if (season === "spring") return "#8f9e83";
+      return "#8a745c";
+    }
+
+    function drawSpringFlowers() {
+      for (const flower of seasonFlowers) {
+        if (flower.roomId !== player.roomId) continue;
+        const sway = Math.sin(performance.now() / 900 + flower.sway + flower.x * 0.01) * 1.8;
+        ctx.save();
+        ctx.translate(flower.x, flower.y);
+        ctx.rotate(Math.sin(performance.now() / 1100 + flower.sway) * 0.08);
+        ctx.fillStyle = `hsl(${flower.hue} 78% 66%)`;
+        for (let i = 0; i < 5; i++) {
+          const a = (Math.PI * 2 * i) / 5;
+          ctx.beginPath();
+          ctx.ellipse(Math.cos(a) * 6, -8 + Math.sin(a) * 2 + sway * 0.1, 4.5 * flower.size, 7.5 * flower.size, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#f6f0c8";
+        ctx.beginPath();
+        ctx.arc(0, -2, 2.8 * flower.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#5b7d34";
+        ctx.fillRect(-1, 2, 2, 10 * flower.size);
+        ctx.restore();
+      }
+    }
+
+    function drawAutumnLeafTexture(room) {
+      ctx.save();
+      const leafCount = Math.max(40, Math.floor((room.width * room.height) / 50000));
+      for (let i = 0; i < leafCount; i++) {
+        const seed = i * 97 + room.width * 0.13 + room.height * 0.19;
+        const x = 36 + ((seed * 53) % (room.width - 72));
+        const y = 28 + ((seed * 71) % (room.height - 56));
+        const size = 5 + (i % 4) * 1.9;
+        const angle = (seed % 1) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = i % 3 === 0 ? "rgba(214, 142, 45, 0.72)" : i % 3 === 1 ? "rgba(234, 180, 70, 0.68)" : "rgba(142, 92, 36, 0.62)";
+        ctx.beginPath();
+        ctx.moveTo(-size, 0);
+        ctx.quadraticCurveTo(-size * 0.4, -size * 0.95, size * 0.7, -size * 0.2);
+        ctx.quadraticCurveTo(size * 0.95, size * 0.1, size * 0.1, size * 0.75);
+        ctx.quadraticCurveTo(-size * 0.7, size * 0.5, -size, 0);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(92, 54, 20, 0.18)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.55, -size * 0.05);
+        ctx.lineTo(size * 0.55, size * 0.25);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    function drawSeasonOverlay() {
+      const season = seasonState.order[seasonState.currentIndex] || "summer";
+      if (!isOutdoorRoom(player.roomId)) return;
+      if (season === "autumn") drawAutumnLeaves();
+      else if (season === "winter") drawWinterSnow();
+      else if (season === "spring") drawSpringBees();
+    }
+
+    function drawAutumnLeaves() {
+      ctx.save();
+      ctx.fillStyle = "rgba(205, 132, 44, 0.84)";
+      const count = 16;
+      for (let i = 0; i < count; i++) {
+        const t = performance.now() / 1800 + i * 0.73;
+        const x = (Math.sin(t * 0.9) * 0.5 + 0.5) * world.room.width + Math.sin(t * 1.9) * 36;
+        const y = (t * 90 + i * 110) % (world.room.height + 160) - 80;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(t * 2.2) * 0.9);
+        ctx.beginPath();
+        ctx.moveTo(-7, 0);
+        ctx.quadraticCurveTo(-2, -7, 8, 0);
+        ctx.quadraticCurveTo(-2, 7, -7, 0);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    function drawWinterSnow() {
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.76)";
+      const count = 28;
+      for (let i = 0; i < count; i++) {
+        const t = performance.now() / 2300 + i * 0.41;
+        const x = ((Math.sin(t * 0.7) * 0.5 + 0.5) * world.room.width + Math.sin(t * 3.1) * 12) % world.room.width;
+        const y = (t * 80 + i * 40) % (world.room.height + 80) - 40;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5 + (i % 3) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawSpringBees() {
+      ctx.save();
+      for (let i = 0; i < 7; i++) {
+        const t = performance.now() / 1200 + i * 0.8 + seasonState.beesSeed;
+        const x = (Math.sin(t * 0.8) * 0.45 + 0.5) * world.room.width + Math.sin(t * 2.3) * 70;
+        const y = (Math.cos(t * 0.9) * 0.35 + 0.5) * world.room.height + Math.cos(t * 1.9) * 45;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(t * 3.2) * 0.2);
+        ctx.fillStyle = "#2c2318";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5, 3.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#f2c84b";
+        ctx.beginPath();
+        ctx.ellipse(-1, 0, 3.4, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-2, -2);
+        ctx.lineTo(-6, -7);
+        ctx.moveTo(0, -2);
+        ctx.lineTo(3, -7);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    function commitSeasonTransition() {
+      if (seasonState.pendingIndex == null) return false;
+      seasonState.currentIndex = seasonState.pendingIndex;
+      seasonState.pendingIndex = null;
+      seasonState.elapsed = 0;
+      return true;
+    }
+
+    function resetSeasonState() {
+      seasonState.currentIndex = 0;
+      seasonState.pendingIndex = null;
+      seasonState.elapsed = 0;
+      seasonState.beesSeed = Math.random() * Math.PI * 2;
+    }
+
+    function updateSeasons(delta) {
+      if (seasonState.pendingIndex != null) {
+        if (player.roomId === "nest") commitSeasonTransition();
+        return;
+      }
+      seasonState.elapsed += delta;
+      if (seasonState.elapsed < seasonState.duration) return;
+      seasonState.elapsed = seasonState.duration;
+      seasonState.pendingIndex = (seasonState.currentIndex + 1) % seasonState.order.length;
+      if (player.roomId === "nest") commitSeasonTransition();
     }
 
     function drawObstructions() {

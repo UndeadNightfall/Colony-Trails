@@ -21,11 +21,14 @@
       const delta = Math.min(0.033, (now - lastTime) / 1000);
       lastTime = now;
       if (!gamePaused) update(delta);
+      if (gamePaused && typeof updatePauseSeasonCountdown === "function") updatePauseSeasonCountdown();
       draw();
       requestAnimationFrame(gameLoop);
     }
 
     function update(delta) {
+      if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
+      if (typeof updateSeasons === "function") updateSeasons(delta);
       updatePlayer(delta);
       updateQueen(delta);
       updateHelpers(delta);
@@ -91,9 +94,11 @@
     }
 
     function updateHud() {
+      if (typeof syncColonyRoleCounts === "function") syncColonyRoleCounts();
       roomDisplay.textContent = `Room: ${world.room.name}`;
-      foodDisplay.textContent = colony.eggs.length > 0 ? `Egg: ${Math.ceil(colony.eggs[0].time)}s ${colony.eggs[0].role}` : `Food: ${colony.food}/${colony.crumbsForEgg}`;
+      foodDisplay.textContent = typeof getNestFoodStatusText === "function" ? getNestFoodStatusText() : (colony.eggs.length > 0 ? `Egg: ${Math.ceil(colony.eggs[0].time)}s ${colony.eggs[0].role}` : `Food: ${colony.food}/${colony.crumbsForEgg}`);
       colonyDisplay.textContent = `Colony: ${colony.ants}`;
+      if (typeof updateColonyDropdown === "function") updateColonyDropdown();
       healthDisplay.textContent = player.sick ? `Health: ${player.health} Sick` : `Health: ${player.health}`;
       actionButton.textContent = player.carrying ? "Carry" : "Find";
     }

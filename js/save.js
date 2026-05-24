@@ -13,6 +13,7 @@
         world: { roomId: player.roomId },
         player: { ...player },
         colony: JSON.parse(JSON.stringify(colony)),
+        season: JSON.parse(JSON.stringify(seasonState)),
         settings: { musicEnabled, autosaveEnabled },
         weather: JSON.parse(JSON.stringify(weather)),
         nest: { radius: nest.radius },
@@ -116,17 +117,40 @@
         savePrefs();
       }
       Object.assign(weather, data.weather || weather);
+      Object.assign(seasonState, data.season || seasonState);
+      if (!Array.isArray(seasonState.order) || seasonState.order.length !== 4) {
+        seasonState.order = ["summer", "autumn", "winter", "spring"];
+      }
+      if (typeof seasonState.currentIndex !== "number" || seasonState.currentIndex < 0 || seasonState.currentIndex >= seasonState.order.length) seasonState.currentIndex = 0;
+      if (typeof seasonState.pendingIndex !== "number" && seasonState.pendingIndex !== null) seasonState.pendingIndex = null;
+      if (typeof seasonState.elapsed !== "number") seasonState.elapsed = 0;
+      if (typeof seasonState.duration !== "number") seasonState.duration = 900;
       Object.assign(foodSpawn, data.foodSpawn || foodSpawn);
       nest.radius = data.nest?.radius || nest.radius;
+      if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
       replaceArray(crumbs, data.crumbs || []);
       replaceArray(helpers, data.helpers || []);
       replaceArray(spiders, data.spiders || []);
       replaceArray(deadAnts, data.deadAnts || []);
       for (const ant of helpers) normalizeSicknessState(ant);
+      for (const ant of helpers) {
+        if (ant.roomId !== "nest") continue;
+        if (typeof ant.nestBlockedCount !== "number") ant.nestBlockedCount = 0;
+        if (typeof ant.nestStuckTime !== "number") ant.nestStuckTime = 0;
+        if (!isNestWalkable(ant.x, ant.y, ant.radius || 10)) {
+          recoverNestEntityPosition(ant, ant.x, ant.y);
+          ant.nestRouteKey = null;
+          ant.nestRoute = null;
+          ant.nestRouteIndex = 0;
+          ant.nestBlockedCount = 0;
+          ant.nestStuckTime = 0;
+        }
+      }
       for (const egg of colony.eggs || []) normalizeEggState(egg);
       nextAntId = helpers.reduce((max, ant) => Math.max(max, ant.id || 0), 0) + 1;
       world.room = rooms[player.roomId] || rooms.nest;
       player.roomId = world.room.id;
+      if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
       if (weather.active) playRainSound();
       else stopRainSound();
       updateCamera();
@@ -164,7 +188,6 @@
     }
 
     function bindSaveControls() {
-      if (saveButton) saveButton.addEventListener("click", () => saveGame(true));
     }
 
     function loadPrefs() {

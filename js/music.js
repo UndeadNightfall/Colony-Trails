@@ -30,3 +30,15 @@
     function toggleMusic() {
       setMusicEnabled(!musicEnabled);
     }
+
+    function syncMusicWithVisibility() {
+      if (document.hidden || document.visibilityState !== "visible" || !musicEnabled || !gameStarted) {
+        pauseBackgroundMusic();
+        return;
+      }
+      if (!gamePaused) playBackgroundMusic();
+    }
+
+    document.addEventListener("visibilitychange", syncMusicWithVisibility);
+    window.addEventListener("pagehide", pauseBackgroundMusic);
+    window.addEventListener("blur", pauseBackgroundMusic);

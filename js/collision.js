@@ -2,6 +2,7 @@
       if (!isOutdoorRoom(entity.roomId)) return;
       for (const item of obstructions) {
         if (item.roomId !== entity.roomId) continue;
+        if (item.solid === false || item.name === "fallen rake") continue;
         if (item.type === "circle") resolveCircleAgainstCircle(entity, item);
         else resolveCircleAgainstRect(entity, item);
       }
@@ -114,7 +115,7 @@
     }
 
     function getWorkerTrailForageRadius() {
-      return 260;
+      return 360;
     }
 
     function getNearestSafeTrailPoint(roomId, x, y) {
@@ -227,8 +228,16 @@
     function getTrailRoamPoint(entity) {
       const nodes = getSafeTrailNavigationNodes(entity.roomId);
       if (nodes.length === 0) return null;
-      const index = Math.abs(Math.floor((entity.id || 0) * 7 + performance.now() / 2400)) % nodes.length;
-      return nodes[index];
+      const homeExit = getHomewardExit(entity.roomId);
+      const homePoint = homeExit ? { x: homeExit.toX, y: homeExit.toY } : null;
+      const ranked = nodes.slice().sort((a, b) => {
+        const aDistance = homePoint ? Math.hypot(a.x - homePoint.x, a.y - homePoint.y) : 0;
+        const bDistance = homePoint ? Math.hypot(b.x - homePoint.x, b.y - homePoint.y) : 0;
+        return bDistance - aDistance;
+      });
+      const spread = Math.max(1, Math.min(4, ranked.length));
+      const index = Math.abs(Math.floor((entity.id || 0) * 7 + performance.now() / 2400)) % spread;
+      return ranked[index];
     }
 
     function getTrailPatrolPoint(ant) {

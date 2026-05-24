@@ -116,6 +116,13 @@
         if (ant.dead) { helpers.splice(i, 1); continue; }
         normalizeSicknessState(ant);
         if (ant.carriedBy) continue;
+        if (ant.roomId === "nest" && ((!isNestWalkable(ant.x, ant.y, ant.radius)) || (ant.nestBlockedCount || 0) >= 3)) {
+          recoverNestEntityPosition(ant, ant.x, ant.y);
+          ant.nestRouteKey = null;
+          ant.nestRoute = null;
+          ant.nestRouteIndex = 0;
+          ant.nestBlockedCount = 0;
+        }
         updateAntRestState(ant, delta);
         updateHelperJob(ant);
         if (ant.job === "moving_to_rest" || ant.job === "resting") {
@@ -125,11 +132,13 @@
           if (ant.timer <= 0) { ant.timer = randomBetween(0.4, 1.2); chooseHelperDirection(ant); }
         }
         if (typeof ant.targetAngle !== "number") ant.targetAngle = ant.angle;
-        const turnRate = ant.job === "resting" ? 2.2 : 7.5;
+        const turnRate = ant.job === "resting" ? 2.2 : ant.roomId === "nest" ? 18 : 7.5;
         ant.angle = approachAngle(ant.angle, ant.targetAngle, delta * turnRate);
         const oldX = ant.x;
         const oldY = ant.y;
-        const moveSpeed = ant.job === "resting" || ant.atMidden ? 0 : ant.speed * (ant.sick && !ant.atMidden ? 0.62 : 1);
+        const inNursery = ant.role === "nurse" && distance(ant, nursery) < nursery.rx * 0.68;
+        const inMidden = ant.role === "middenworker" && distance(ant, midden) < midden.radius + 20;
+        const moveSpeed = ant.job === "resting" || ant.atMidden ? 0 : ((ant.role === "nurse" && ant.job === "nursing" && inNursery) || (ant.role === "middenworker" && (ant.job === "midden_patrolling" || ant.job === "waiting_midden") && inMidden) ? 0 : ant.speed * (ant.sick && !ant.atMidden ? 0.62 : 1));
         const blocked = moveNestEntity(ant, Math.cos(ant.angle) * moveSpeed * delta, Math.sin(ant.angle) * moveSpeed * delta);
         const room = rooms[ant.roomId];
         ant.x = clamp(ant.x, 30, room.width - 30);
@@ -139,8 +148,39 @@
         handleRoomTransitions(ant);
         if (oldRoom !== ant.roomId) ant.targetAngle = ant.angle + Math.PI + randomBetween(-0.35, 0.35);
         else if (blocked && ant.roomId === "nest" && ant.job !== "resting") {
-          ant.pathTarget = null;
-          chooseHelperDirection(ant);
+          ant.nestRouteKey = null;
+          ant.nestRoute = null;
+          ant.nestRouteIndex = 0;
+          ant.nestBlockedCount = (ant.nestBlockedCount || 0) + 1;
+          let escaped = false;
+          if (ant.nestBlockedCount >= 5) {
+            hardResetNestAnt(ant, oldX, oldY);
+            escaped = true;
+          } else if (ant.nestBlockedCount >= 2) {
+            const escape = findNearestNestSafeSpot(ant, oldX, oldY);
+            if (escape) {
+              ant.targetAngle = Math.atan2(escape.y - ant.y, escape.x - ant.x);
+              escaped = true;
+            } else {
+              ant.targetAngle = ant.angle + randomBetween(0.8, 1.4);
+            }
+            ant.timer = randomBetween(0.2, 0.5);
+            ant.nestBlockedCount = 0;
+          }
+          if (!escaped) chooseHelperDirection(ant);
+        } else if (Math.abs(ant.x - oldX) > 0.35 || Math.abs(ant.y - oldY) > 0.35) {
+          ant.nestBlockedCount = 0;
+        }
+        const nestMoved = Math.hypot(ant.x - oldX, ant.y - oldY);
+        if (ant.roomId === "nest" && ant.job !== "resting" && !ant.carrying) {
+          if (nestMoved < 0.08) {
+            ant.nestStuckTime = (ant.nestStuckTime || 0) + delta;
+            if (ant.nestStuckTime >= 1.5) hardResetNestAnt(ant, oldX, oldY);
+          } else {
+            ant.nestStuckTime = 0;
+          }
+        } else {
+          ant.nestStuckTime = 0;
         }
         syncCarriedSickAnt(ant);
         syncCarriedDeadAnt(ant);
@@ -148,6 +188,35 @@
         handleMiddenWork(ant, delta);
         handleSoldierCombat(ant, delta);
       }
+    }
+
+    function hardResetNestAnt(ant, oldX, oldY) {
+      const spawn = typeof getNestRecoverySpawnPoint === "function" ? getNestRecoverySpawnPoint(ant) : null;
+      const fallback = spawn || recoverNestEntityPosition(ant, oldX, oldY) || { x: ant.x, y: ant.y };
+      ant.x = fallback.x;
+      ant.y = fallback.y;
+      ant.nestRouteKey = null;
+      ant.nestRoute = null;
+      ant.nestRouteIndex = 0;
+      ant.nestBlockedCount = 0;
+      ant.nestStuckTime = 0;
+      if (ant.job === "moving_to_rest" || ant.job === "resting") {
+        ant.needsRest = false;
+        ant.restTarget = null;
+        ant.restTunnelIndex = null;
+        ant.restSlotIndex = null;
+        ant.restDuration = 0;
+        ant.restMoveTimer = 0;
+        ant.restTimer = randomBetween(18, 36);
+      }
+      if (!ant.carrying) {
+        if (ant.role === "nurse") ant.job = "nursing";
+        else if (ant.role === "middenworker") ant.job = "midden_patrolling";
+        else if (ant.role === "soldier") ant.job = "leaving_nest";
+        else if (ant.role === "worker") ant.job = "leaving_nest";
+      }
+      ant.timer = randomBetween(0.15, 0.45);
+      ant.targetAngle = ant.angle + randomBetween(-0.4, 0.4);
     }
 
     function updateAntRestState(ant, delta) {
@@ -284,7 +353,7 @@
         ant.targetCrumb = null;
         ant.targetCorpse = null;
         ant.targetSickAnt = null;
-        ant.job = "leaving_nest";
+        ant.job = weather.active ? "roaming" : "leaving_nest";
         return;
       }
       if (ant.role === "soldier") {
@@ -567,7 +636,7 @@
         ant.targetAngle = ant.angle + randomBetween(-0.8, 0.8);
         return;
       }
-      if (ant.roomId !== "nest" || !isNestWalkable(target.x, target.y, ant.radius)) {
+      if (ant.roomId !== "nest") {
         ant.targetAngle = Math.atan2(target.y - ant.y, target.x - ant.x);
         return;
       }
@@ -576,16 +645,32 @@
     }
 
     function getNextNestWaypoint(ant, target) {
-      if (hasNestLineOfSight(ant, target, ant.radius)) return target;
       const nodes = getNestNavigationNodes();
-      const startIndex = findNearestVisibleNestNode(ant, nodes);
-      const goalIndex = findNearestVisibleNestNode(target, nodes);
-      if (startIndex < 0 || goalIndex < 0) return target;
-      const path = findNestPath(nodes, startIndex, goalIndex);
-      if (path.length < 2) return target;
-      const waypoint = nodes[path[1]];
-      if (distance(ant, waypoint) < 24 && path.length > 2) return nodes[path[2]];
+      const targetKey = getNestRouteKey(target);
+      if (ant.nestRouteKey !== targetKey || !Array.isArray(ant.nestRoute) || ant.nestRoute.length === 0) {
+        const startIndex = findNearestVisibleNestNode(ant, nodes);
+        let goalIndex = findNearestVisibleNestNode(target, nodes);
+        if (goalIndex < 0) goalIndex = findNearestNestNode(target, nodes);
+        if (startIndex < 0 || goalIndex < 0) return target;
+        const path = findNestPath(nodes, startIndex, goalIndex);
+        if (path.length < 2) return target;
+        ant.nestRouteKey = targetKey;
+        ant.nestRoute = path;
+        ant.nestRouteIndex = 1;
+      }
+      const route = ant.nestRoute;
+      if (!route || ant.nestRouteIndex >= route.length) return target;
+      let waypoint = nodes[route[ant.nestRouteIndex]];
+      while (waypoint && distance(ant, waypoint) < 24 && ant.nestRouteIndex < route.length - 1) {
+        ant.nestRouteIndex += 1;
+        waypoint = nodes[route[ant.nestRouteIndex]];
+      }
+      if (!waypoint) return target;
       return waypoint;
+    }
+
+    function getNestRouteKey(target) {
+      return `${Math.round(target.x)}:${Math.round(target.y)}:${target.roomId || "nest"}`;
     }
 
     function getNestNavigationNodes() {
@@ -619,6 +704,19 @@
       let bestDistance = Infinity;
       for (let i = 0; i < nodes.length; i++) {
         if (!hasNestLineOfSight(entity, nodes[i], entity.radius || 10)) continue;
+        const d = distance(entity, nodes[i]);
+        if (d < bestDistance) {
+          best = i;
+          bestDistance = d;
+        }
+      }
+      return best;
+    }
+
+    function findNearestNestNode(entity, nodes) {
+      let best = -1;
+      let bestDistance = Infinity;
+      for (let i = 0; i < nodes.length; i++) {
         const d = distance(entity, nodes[i]);
         if (d < bestDistance) {
           best = i;
@@ -776,6 +874,8 @@
       ant.dead = true;
       colony.ants = Math.max(0, colony.ants - 1);
       if (colony.roles[ant.role] > 0) colony.roles[ant.role] -= 1;
+      if (typeof syncColonyRoleCounts === "function") syncColonyRoleCounts();
+      if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
       deadAnts.push(createRecoverableDeadAnt(ant.roomId, ant.x, ant.y, ant.radius, ant.role));
       if (source) source.aggro = false;
       objectiveText.textContent = `A ${formatRoleLabel(ant.role)} died. Workers will recover the body.`;
@@ -901,11 +1001,9 @@
 
     function getMiddenWorkPoint(ant, offset = 0) {
       const slots = [
-        { x: midden.x - 86, y: midden.y + 40 },
-        { x: midden.x - 48, y: midden.y + 66 },
-        { x: midden.x - 14, y: midden.y + 44 },
-        { x: midden.x - 108, y: midden.y + 8 },
-        { x: midden.x - 58, y: midden.y - 42 }
+        { x: midden.x - 12, y: midden.y + 2 },
+        { x: midden.x + 4, y: midden.y - 8 },
+        { x: midden.x + 10, y: midden.y + 10 }
       ];
       const index = Math.abs(((ant && ant.id) || 0) + offset) % slots.length;
       return slots[index];
@@ -913,11 +1011,9 @@
 
     function getNurseryPoint(ant) {
       const slots = [
-        { x: nursery.x - 72, y: nursery.y - 12 },
-        { x: nursery.x - 28, y: nursery.y + 42 },
-        { x: nursery.x + 46, y: nursery.y + 24 },
-        { x: nursery.x + 68, y: nursery.y - 28 },
-        { x: nursery.x - 96, y: nursery.y + 34 }
+        { x: nursery.x - 10, y: nursery.y + 2 },
+        { x: nursery.x + 4, y: nursery.y - 6 },
+        { x: nursery.x + 12, y: nursery.y + 10 }
       ];
       return slots[Math.abs((ant && ant.id) || 0) % slots.length];
     }
@@ -1055,21 +1151,19 @@
     }
 
     function getNestRestCapacity(tunnel) {
-      return Math.max(2, Math.floor(tunnel.width / 16));
+      return Math.max(2, Math.floor(tunnel.length / 64));
     }
 
     function createNestRestSlot(tunnel, tunnelIndex, slotIndex) {
-      const alongStart = 105;
-      const alongStep = 52;
-      const alongLimit = Math.max(118, tunnel.length - 42);
+      const alongStart = 92;
+      const alongStep = 48;
+      const alongLimit = Math.max(112, tunnel.length - 34);
       const along = Math.min(alongLimit, alongStart + slotIndex * alongStep);
-      const sideSpread = tunnel.width * 0.18;
-      const side = (slotIndex % 2 === 0 ? -1 : 1) * sideSpread * (0.45 + Math.min(0.5, slotIndex * 0.08));
       return {
         tunnelIndex,
         slotIndex,
-        x: tunnel.originX + Math.cos(tunnel.angle) * along - Math.sin(tunnel.angle) * side,
-        y: tunnel.originY + Math.sin(tunnel.angle) * along + Math.cos(tunnel.angle) * side
+        x: tunnel.originX + Math.cos(tunnel.angle) * along,
+        y: tunnel.originY + Math.sin(tunnel.angle) * along
       };
     }
 
@@ -1094,8 +1188,6 @@
       const occupiedCount = [...assignments].filter(value => value.startsWith(`${bestIndex}:`)).length;
       const slotIndex = occupiedCount;
       const slot = createNestRestSlot(bestTunnel, bestIndex, slotIndex);
-      slot.x += Math.cos(bestTunnel.angle) * 18;
-      slot.y += Math.sin(bestTunnel.angle) * 18;
       return slot;
     }
 

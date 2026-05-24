@@ -44,7 +44,7 @@
         }
       }
 
-      if (isOutdoorRoom(player.roomId) && !player.carrying) {
+      if (!player.carrying) {
         const sick = findNearestRecoverableSickAnt(player, 90);
         if (sick && distance(player, sick) < player.radius + sick.radius + 8) {
           sick.carried = true;
