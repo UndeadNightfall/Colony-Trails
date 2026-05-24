@@ -3,10 +3,25 @@
     var startButton = document.getElementById("startButton");
     var loadButton = document.getElementById("loadButton");
 
+    function showTitleScreen() {
+      if (titleScreen) titleScreen.classList.remove("hidden");
+      updateTitleLoadState();
+    }
+
+    function hideTitleScreen() {
+      if (titleScreen) titleScreen.classList.add("hidden");
+    }
+
+    function updateTitleLoadState() {
+      if (loadButton) loadButton.disabled = !hasSaveGame();
+    }
+
     function startFromTitle() {
       if (gameStarted) return;
       gameStarted = true;
-      if (titleScreen) titleScreen.classList.add("hidden");
+      if (typeof hidePauseMenu === "function") hidePauseMenu();
+      hideTitleScreen();
+      playBackgroundMusic();
       startGame();
     }
 
@@ -25,7 +40,7 @@
     }
 
     if (loadButton) {
-      loadButton.disabled = !hasSaveGame();
+      updateTitleLoadState();
       loadButton.addEventListener("click", loadFromTitle);
       loadButton.addEventListener("touchend", event => {
         event.preventDefault();

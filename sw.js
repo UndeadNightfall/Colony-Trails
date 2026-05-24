@@ -1,4 +1,4 @@
-const CACHE_NAME = "colony-trails-v3";
+const CACHE_NAME = "colony-trails-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -18,6 +18,9 @@ const ASSETS = [
   "./js/input.js",
   "./js/pwa.js",
   "./js/save.js",
+  "./js/sfx.js",
+  "./js/music.js",
+  "./js/weather.js",
   "./js/title.js",
   "./js/main.js"
 ];
@@ -38,6 +41,19 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+  const path = decodeURIComponent(new URL(event.request.url).pathname);
+  if (event.request.destination === "audio" || path.endsWith("/morning meadow.mp3")) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async cache => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        const response = await fetch(event.request);
+        if (response.ok) cache.put(event.request, response.clone());
+        return response;
+      })
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );

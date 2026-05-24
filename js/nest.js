@@ -172,15 +172,77 @@
       }
       drawText(`${Math.ceil(colony.eggs[0].time)}s ${colony.eggs[0].role}`, queen.x - 126, queen.y + 150);
     }
-    function resolveNestWalls(entity, oldX, oldY) {
-      if (entity.roomId !== "nest" || isNestWalkable(entity.x, entity.y, entity.radius)) return;
-      entity.x = oldX;
-      entity.y = oldY;
-      if (!isNestWalkable(entity.x, entity.y, entity.radius)) {
-        entity.x = queen.x + 80;
-        entity.y = queen.y;
+    function moveNestEntity(entity, dx, dy) {
+      if (entity.roomId !== "nest") {
+        entity.x += dx;
+        entity.y += dy;
+        return false;
       }
-      entity.angle += Math.PI + randomBetween(-0.35, 0.35);
+      const startX = entity.x;
+      const startY = entity.y;
+      let blocked = false;
+
+      if (dx !== 0) {
+        entity.x = startX + dx;
+        if (!isNestWalkable(entity.x, startY, entity.radius)) {
+          entity.x = startX;
+          blocked = true;
+        }
+      }
+
+      if (dy !== 0) {
+        entity.y = startY + dy;
+        if (!isNestWalkable(entity.x, entity.y, entity.radius)) {
+          entity.y = startY;
+          blocked = true;
+        }
+      }
+
+      if (!isNestWalkable(entity.x, entity.y, entity.radius)) {
+        const safeSpot = findNearestNestSafeSpot(entity, startX, startY);
+        if (safeSpot) {
+          entity.x = safeSpot.x;
+          entity.y = safeSpot.y;
+        } else {
+          entity.x = startX;
+          entity.y = startY;
+        }
+        blocked = true;
+      }
+
+      return blocked;
+    }
+
+    function findNearestNestSafeSpot(entity, oldX, oldY) {
+      const anchors = [
+        { x: oldX, y: oldY },
+        { x: entity.x, y: entity.y },
+        { x: queen.x + 80, y: queen.y },
+        { x: queen.x + 52, y: queen.y - 18 },
+        { x: queen.x + 52, y: queen.y + 18 },
+        { x: queen.x - 22, y: queen.y + 22 }
+      ];
+      const offsets = [0, 10, 18, 26, 34, 44, 56, 70];
+      let best = null;
+      let bestScore = Infinity;
+      for (const anchor of anchors) {
+        for (const radius of offsets) {
+          for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 * i) / 12;
+            const candidate = {
+              x: anchor.x + Math.cos(angle) * radius,
+              y: anchor.y + Math.sin(angle) * radius
+            };
+            if (!isNestWalkable(candidate.x, candidate.y, entity.radius)) continue;
+            const score = Math.hypot(candidate.x - oldX, candidate.y - oldY) + Math.hypot(candidate.x - queen.x, candidate.y - queen.y) * 0.12;
+            if (score < bestScore) {
+              bestScore = score;
+              best = candidate;
+            }
+          }
+        }
+      }
+      return best;
     }
 
     function isNestWalkable(x, y, radius) {

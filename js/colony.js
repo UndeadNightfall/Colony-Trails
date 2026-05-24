@@ -7,6 +7,7 @@
     function deliverFood() {
       player.carrying = false;
       colony.food += 1;
+      playGiveSound();
       checkEggProduction();
       scheduleCrumbRespawnIfNeeded();
     }
@@ -83,7 +84,8 @@
 
     function spawnColonyAnt(role) {
       const stats = getRoleStats(role);
-      helpers.push({ role, x: queen.x + randomBetween(-40, 40), y: queen.y + randomBetween(-35, 35), angle: randomBetween(0, Math.PI * 2), timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, targetCrumb: null, job: role === "nurse" ? "nursing" : "leaving_nest", restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false });
+      const angle = randomBetween(0, Math.PI * 2);
+      helpers.push({ id: nextAntId++, role, health: 3, x: queen.x + randomBetween(-40, 40), y: queen.y + randomBetween(-35, 35), angle, targetAngle: angle, timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, targetCrumb: null, job: role === "nurse" ? "nursing" : "leaving_nest", restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false });
     }
 
     function getRoleStats(role) {

@@ -4,16 +4,19 @@
     var foodDisplay = document.getElementById("foodDisplay");
     var colonyDisplay = document.getElementById("colonyDisplay");
     var healthDisplay = document.getElementById("healthDisplay");
+    var musicButton = document.getElementById("musicButton");
     var objectiveText = document.getElementById("objectiveText");
     var joystick = document.getElementById("joystick");
     var stick = document.getElementById("stick");
     var actionButton = document.getElementById("actionButton");
     var saveButton = document.getElementById("saveButton");
+    var pauseButton = document.getElementById("pauseButton");
 
     var rooms = {
       nest: { id: "nest", name: "Nest", width: 1200, height: 760 },
       overworld: { id: "overworld", name: "Backyard", width: 1900, height: 1200, ground: "grass" },
       patio: { id: "patio", name: "Concrete Patio", width: 1500, height: 950, ground: "patio" },
+      house: { id: "house", name: "House", width: 1500, height: 950, ground: "house" },
       sandpit: { id: "sandpit", name: "Sandpit", width: 1350, height: 900, ground: "sand" },
       garden: { id: "garden", name: "Garden Bed", width: 1450, height: 1000, ground: "soil" }
     };
@@ -30,6 +33,8 @@
       overworldToNest: { roomId: "overworld", x: 115, y: 590, radius: 58, to: "nest", toX: 958, toY: 380, label: "Nest" },
       overworldToPatio: { roomId: "overworld", x: 1720, y: 270, radius: 58, to: "patio", toX: 160, toY: 470, label: "Patio" },
       patioToOverworld: { roomId: "patio", x: 70, y: 470, radius: 58, to: "overworld", toX: 1640, toY: 270, label: "Yard" },
+      patioToHouse: { roomId: "patio", x: 1410, y: 470, radius: 58, to: "house", toX: 160, toY: 470, label: "House" },
+      houseToPatio: { roomId: "house", x: 70, y: 470, radius: 58, to: "patio", toX: 1330, toY: 470, label: "Patio" },
       overworldToSandpit: { roomId: "overworld", x: 940, y: 1100, radius: 58, to: "sandpit", toX: 675, toY: 170, label: "Sandpit" },
       sandpitToOverworld: { roomId: "sandpit", x: 675, y: 58, radius: 58, to: "overworld", toX: 940, toY: 1018, label: "Yard" },
       overworldToGarden: { roomId: "overworld", x: 280, y: 1080, radius: 58, to: "garden", toX: 725, toY: 140, label: "Garden" },
@@ -70,6 +75,13 @@
       { roomId: "patio", type: "rect", name: "patio chair", x: 760, y: 540, width: 170, height: 120, radius: 16, color: "#6f807b" },
       { roomId: "patio", type: "rect", name: "doormat", x: 1080, y: 180, width: 240, height: 120, radius: 18, color: "#6d4b30" },
       { roomId: "patio", type: "circle", name: "watering can", x: 1140, y: 680, radius: 42, color: "#5b857f" },
+      { roomId: "house", type: "rect", name: "sofa", x: 180, y: 190, width: 360, height: 160, radius: 24, color: "#7b5b46" },
+      { roomId: "house", type: "rect", name: "coffee table", x: 610, y: 340, width: 180, height: 100, radius: 18, color: "#8d6841" },
+      { roomId: "house", type: "rect", name: "dining table", x: 950, y: 180, width: 300, height: 180, radius: 22, color: "#9d7a58" },
+      { roomId: "house", type: "rect", name: "rug", x: 500, y: 520, width: 420, height: 180, radius: 32, color: "#b56c4c" },
+      { roomId: "house", type: "circle", name: "potted plant", x: 1210, y: 620, radius: 48, color: "#8d5a31" },
+      { roomId: "house", type: "rect", name: "bookshelf", x: 120, y: 560, width: 220, height: 240, radius: 18, color: "#6e4e35" },
+      { roomId: "house", type: "circle", name: "lamp", x: 1270, y: 680, radius: 34, color: "#d5c7a0" },
       { roomId: "sandpit", type: "rect", name: "timber sleeper", x: 120, y: 105, width: 440, height: 34, radius: 14, color: "#7b4a28" },
       { roomId: "sandpit", type: "rect", name: "timber sleeper", x: 790, y: 105, width: 440, height: 34, radius: 14, color: "#7b4a28" },
       { roomId: "sandpit", type: "rect", name: "timber sleeper", x: 120, y: 760, width: 1110, height: 34, radius: 14, color: "#7b4a28" },
@@ -90,3 +102,78 @@
     var lastTime = performance.now();
     var midden = { x: 170, y: 535, radius: 58 };
     var saveState = { autosaveTimer: 0 };
+    var gamePaused = false;
+    var musicEnabled = true;
+    var autosaveEnabled = true;
+    var nextAntId = 1;
+    var weather = {
+      active: false,
+      timeLeft: 0,
+      nextStorm: 24,
+      exposureSeconds: 0,
+      cleanupPriority: false,
+      killCount: 0
+    };
+    var defenseCall = {
+      active: false,
+      targetSpiderId: null,
+      timeLeft: 0,
+      lastCallAt: -10
+    };
+
+    function resetGameState() {
+      world.room = rooms.nest;
+      world.cameraX = 0;
+      world.cameraY = 0;
+      input.x = 0;
+      input.y = 0;
+      input.active = false;
+      input.pointerId = null;
+      Object.assign(player, { x: 430, y: 380, radius: 14, speed: 190, angle: 0, carrying: false, health: 3, invulnerable: 0, roomId: "nest" });
+      Object.assign(queen, { x: 260, y: 380, radius: 48, roomId: "nest" });
+      Object.assign(nest, { x: 260, y: 380, radius: 145, roomId: "nest" });
+      Object.assign(colony, {
+        food: 0,
+        ants: 2,
+        eggs: [],
+        crumbsForEgg: 3,
+        incubationDuration: 18,
+        nestStage: 1,
+        tunnelCapacity: [4, 8, 14, 22],
+        roles: { worker: 1, soldier: 0, nurse: 0 },
+        recoveredDead: 0,
+        excavation: { active: false, targetStage: 1, progress: 0, duration: 22 }
+      });
+      crumbs.length = 0;
+      helpers.length = 0;
+      spiders.length = 0;
+      deadAnts.length = 0;
+      combatEffects.length = 0;
+      grassClumps.length = 0;
+      pebbles.length = 0;
+      saveState.autosaveTimer = 20;
+      resetWeatherState();
+      resetDefenseCall();
+      nextAntId = 1;
+      stopRainSound();
+      gamePaused = false;
+      lastTime = performance.now();
+      objectiveText.textContent = "Leave the nest, find crumbs, and bring food back to the queen.";
+      if (stick) stick.style.transform = "translate(-50%, -50%)";
+    }
+
+    function resetWeatherState() {
+      weather.active = false;
+      weather.timeLeft = 0;
+      weather.nextStorm = 300 + Math.random() * 120;
+      weather.exposureSeconds = 0;
+      weather.cleanupPriority = false;
+      weather.killCount = 0;
+    }
+
+    function resetDefenseCall() {
+      defenseCall.active = false;
+      defenseCall.targetSpiderId = null;
+      defenseCall.timeLeft = 0;
+      defenseCall.lastCallAt = -10;
+    }

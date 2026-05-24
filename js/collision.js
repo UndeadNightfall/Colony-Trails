@@ -80,6 +80,7 @@
     function getHomewardExit(roomId) {
       if (roomId === "nest") return null;
       if (roomId === "patio") return exits.patioToOverworld;
+      if (roomId === "house") return exits.houseToPatio;
       if (roomId === "sandpit") return exits.sandpitToOverworld;
       if (roomId === "garden") return exits.gardenToOverworld;
       return exits.overworldToNest;
@@ -91,7 +92,7 @@
     }
 
     function isOutdoorRoom(roomId) {
-      return roomId !== "nest";
+      return roomId !== "nest" && roomId !== "house";
     }
 
     function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }

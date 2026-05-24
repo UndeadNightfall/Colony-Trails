@@ -9,10 +9,27 @@
         const dToPlayer = distance(spider, player);
         const aggroRange = 260;
         const giveUpRange = 430;
+        const soldierTarget = getSpiderSoldierTarget(spider);
         let targetAngle;
-        if (dToPlayer < aggroRange) spider.aggro = true;
-        if (dToPlayer > giveUpRange) spider.aggro = false;
-        if (spider.aggro) {
+        if (spider.soldierFocusTimer > 0) spider.soldierFocusTimer -= delta;
+        if (soldierTarget) {
+          spider.aggro = true;
+          spider.targetMode = "soldier";
+          spider.targetAntId = soldierTarget.id;
+        } else if (dToPlayer < aggroRange && spider.targetMode !== "soldier") {
+          spider.aggro = true;
+        }
+        if (spider.targetMode === "soldier" && spider.soldierFocusTimer <= 0 && !soldierTarget) {
+          spider.targetMode = null;
+          spider.targetAntId = null;
+        }
+        if (dToPlayer > giveUpRange && spider.targetMode !== "soldier") spider.aggro = false;
+        if (spider.aggro && spider.targetMode === "soldier" && soldierTarget) {
+          targetAngle = Math.atan2(soldierTarget.y - spider.y, soldierTarget.x - spider.x);
+          spider.angle = targetAngle;
+          spider.x += Math.cos(targetAngle) * spider.speed * 1.25 * delta;
+          spider.y += Math.sin(targetAngle) * spider.speed * 1.25 * delta;
+        } else if (spider.aggro) {
           targetAngle = Math.atan2(player.y - spider.y, player.x - spider.x);
           spider.angle = targetAngle;
           spider.x += Math.cos(targetAngle) * spider.speed * 1.25 * delta;
@@ -26,6 +43,12 @@
           spider.y += Math.sin(spider.angle) * spider.speed * 0.62 * delta;
         }
         resolveOverworldObstructions(spider);
+        const targetSoldier = soldierTarget || getSpiderSoldierTarget(spider);
+        if (targetSoldier && distance(spider, targetSoldier) < spider.radius + targetSoldier.radius) {
+          spider.aggro = true;
+          spider.targetMode = "soldier";
+          spider.targetAntId = targetSoldier.id;
+        }
         if (distance(spider, player) < spider.radius + player.radius && player.invulnerable <= 0) {
           player.health -= 1;
           player.invulnerable = 1.2;
@@ -41,7 +64,11 @@
     function killSpider(spider) {
       spider.alive = false;
       spider.aggro = false;
+      spider.targetMode = null;
+      spider.targetAntId = null;
+      spider.soldierFocusTimer = 0;
       spider.respawnTimer = randomBetween(28, 46);
+      if (defenseCall.targetSpiderId === spider.id) resetDefenseCall();
       objectiveText.textContent = "Soldiers cleared a spider. The area is safer for now.";
     }
 
@@ -51,6 +78,20 @@
       spider.y = spider.homeY;
       spider.angle = randomBetween(0, Math.PI * 2);
       spider.aggro = false;
+      spider.targetMode = null;
+      spider.targetAntId = null;
+      spider.soldierFocusTimer = 0;
+    }
+
+    function getSpiderSoldierTarget(spider) {
+      if (spider.targetMode !== "soldier" && spider.soldierFocusTimer <= 0) return null;
+      if (spider.targetAntId) {
+        for (const ant of helpers) {
+          if (ant.dead || ant.role !== "soldier" || ant.roomId !== spider.roomId) continue;
+          if (ant.id === spider.targetAntId) return ant;
+        }
+      }
+      return findNearestSoldierForSpider(spider, 220);
     }
 
     function drawSpiders() {

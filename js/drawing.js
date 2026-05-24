@@ -12,6 +12,7 @@
       drawHelpers();
       drawPlayer();
       ctx.restore();
+      if (weather.active) drawRain();
     }
     function drawRakeDetails(item) {
       ctx.strokeStyle = "#4b3523";
@@ -60,6 +61,84 @@
     function drawGardenLightDetails(item) {
       ctx.fillStyle = "#d9d59d"; ctx.beginPath(); ctx.arc(item.x, item.y - 5, item.radius * 0.48, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#3d453c"; ctx.fillRect(item.x - 4, item.y + 14, 8, 38);
+    }
+
+    function drawSofaDetails(item) {
+      ctx.fillStyle = "rgba(255, 238, 220, 0.16)";
+      ctx.fillRect(item.x + 18, item.y + 20, item.width - 36, 34);
+      ctx.strokeStyle = "rgba(35, 21, 14, 0.35)";
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(item.x + 22, item.y + item.height - 18, 12, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(item.x + item.width - 22, item.y + item.height - 18, 12, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    function drawCoffeeTableDetails(item) {
+      ctx.fillStyle = "rgba(255, 240, 220, 0.12)";
+      roundRect(item.x + 20, item.y + 16, item.width - 40, item.height - 32, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(54, 34, 18, 0.36)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(item.x + 24, item.y + item.height / 2); ctx.lineTo(item.x + item.width - 24, item.y + item.height / 2); ctx.stroke();
+    }
+
+    function drawDiningTableDetails(item) {
+      ctx.fillStyle = "rgba(255, 240, 220, 0.14)";
+      roundRect(item.x + 24, item.y + 22, item.width - 48, item.height - 44, 16);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(60, 36, 24, 0.32)";
+      ctx.lineWidth = 4;
+      for (const [dx, dy] of [[18, 18], [item.width - 18, 18], [18, item.height - 18], [item.width - 18, item.height - 18]]) {
+        ctx.beginPath();
+        ctx.moveTo(item.x + dx, item.y + dy);
+        ctx.lineTo(item.x + dx + (dx < item.width / 2 ? -8 : 8), item.y + dy + (dy < item.height / 2 ? -18 : 18));
+        ctx.stroke();
+      }
+    }
+
+    function drawRugDetails(item) {
+      ctx.fillStyle = "rgba(255, 238, 220, 0.1)";
+      ctx.fillRect(item.x + 14, item.y + 14, item.width - 28, item.height - 28);
+      ctx.strokeStyle = "rgba(82, 40, 24, 0.28)";
+      ctx.lineWidth = 2;
+      for (let y = item.y + 20; y < item.y + item.height - 20; y += 22) {
+        ctx.beginPath();
+        ctx.moveTo(item.x + 24, y);
+        ctx.lineTo(item.x + item.width - 24, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawBookshelfDetails(item) {
+      ctx.fillStyle = "rgba(255, 238, 220, 0.12)";
+      for (let y = item.y + 18; y < item.y + item.height - 18; y += 48) {
+        ctx.fillRect(item.x + 18, y, item.width - 36, 10);
+      }
+      ctx.strokeStyle = "rgba(40, 24, 14, 0.34)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(item.x + item.width / 2, item.y + 12); ctx.lineTo(item.x + item.width / 2, item.y + item.height - 12); ctx.stroke();
+    }
+
+    function drawPottedPlantDetails(item) {
+      ctx.fillStyle = "#4b7a42";
+      for (let i = 0; i < 7; i++) {
+        const a = i * 0.9;
+        ctx.beginPath();
+        ctx.ellipse(item.x + Math.cos(a) * 20, item.y - 34 + Math.sin(a) * 9, 9, 28, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#6d4024";
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, item.radius * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawLampDetails(item) {
+      ctx.fillStyle = "rgba(255, 249, 216, 0.78)";
+      ctx.beginPath();
+      ctx.arc(item.x, item.y - 8, item.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#4c4338";
+      ctx.fillRect(item.x - 4, item.y + 10, 8, 42);
     }
 
 
@@ -193,5 +272,26 @@
       ctx.fillStyle = "#ce8750"; ctx.beginPath(); ctx.ellipse(-18, 0, 34, 29, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#e2a05c"; ctx.beginPath(); ctx.ellipse(-55, 0, 27, 24, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#1b0d08"; ctx.beginPath(); ctx.arc(-64, -7, 3, 0, Math.PI * 2); ctx.arc(-64, 7, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawRain() {
+      if (!isOutdoorRoom(player.roomId)) return;
+      const screenW = window.innerWidth;
+      const screenH = window.innerHeight;
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      ctx.strokeStyle = "#9fc7da";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 130; i++) {
+        const x = (i * 67 + Math.floor(performance.now() * 0.42)) % (screenW + 120) - 60;
+        const y = (i * 41 + Math.floor(performance.now() * 1.18)) % (screenH + 120) - 60;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 12, y + 24);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(80, 110, 132, 0.08)";
+      ctx.fillRect(0, 0, screenW, screenH);
       ctx.restore();
     }

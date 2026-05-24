@@ -8,6 +8,7 @@
     }
 
     function startGame() {
+      resetGameState();
       generateMapDecorations();
       spawnCrumbs();
       spawnSpiders();
@@ -16,9 +17,10 @@
       requestAnimationFrame(gameLoop);
     }
     function gameLoop(now) {
+      if (!gameStarted) return;
       const delta = Math.min(0.033, (now - lastTime) / 1000);
       lastTime = now;
-      update(delta);
+      if (!gamePaused) update(delta);
       draw();
       requestAnimationFrame(gameLoop);
     }
@@ -31,7 +33,9 @@
       updateExcavation(delta);
       updateFoodSpawns(delta);
       updateCombatEffects(delta);
+      updateWeather(delta);
       updateAutosave(delta);
+      updateSaveToast(delta);
       updateCamera();
       updateHud();
     }

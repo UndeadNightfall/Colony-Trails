@@ -10,19 +10,21 @@
           ant.timer -= delta;
           if (ant.timer <= 0) { ant.timer = randomBetween(0.4, 1.2); chooseHelperDirection(ant); }
         }
+        if (typeof ant.targetAngle !== "number") ant.targetAngle = ant.angle;
+        const turnRate = ant.job === "resting" ? 2.2 : 7.5;
+        ant.angle = approachAngle(ant.angle, ant.targetAngle, delta * turnRate);
         const oldX = ant.x;
         const oldY = ant.y;
         const moveSpeed = ant.job === "resting" ? 0 : ant.speed;
-        ant.x += Math.cos(ant.angle) * moveSpeed * delta;
-        ant.y += Math.sin(ant.angle) * moveSpeed * delta;
+        const blocked = moveNestEntity(ant, Math.cos(ant.angle) * moveSpeed * delta, Math.sin(ant.angle) * moveSpeed * delta);
         const room = rooms[ant.roomId];
         ant.x = clamp(ant.x, 30, room.width - 30);
         ant.y = clamp(ant.y, 30, room.height - 30);
         resolveOverworldObstructions(ant);
-        resolveNestWalls(ant, oldX, oldY);
         const oldRoom = ant.roomId;
         handleRoomTransitions(ant);
-        if (oldRoom !== ant.roomId) ant.angle += Math.PI + randomBetween(-0.35, 0.35);
+        if (oldRoom !== ant.roomId) ant.targetAngle = ant.angle + Math.PI + randomBetween(-0.35, 0.35);
+        else if (blocked && ant.roomId === "nest" && ant.job !== "resting") ant.targetAngle = ant.angle + randomBetween(0.7, 1.4);
         handleHelperForaging(ant);
         handleSoldierCombat(ant, delta);
       }
@@ -49,6 +51,18 @@
     }
 
     function updateHelperJob(ant) {
+      if (weather.active && ant.roomId !== "nest") {
+        ant.job = "returning_home";
+        return;
+      }
+      if (ant.role === "soldier" && defenseCall.active && ant.roomId === player.roomId) {
+        const target = findDefenseCallTarget();
+        if (target) {
+          ant.targetSpider = target;
+          ant.job = "attacking_spider";
+          return;
+        }
+      }
       if (ant.role === "nurse") { ant.job = "nursing"; return; }
       if (ant.needsRest && !ant.carrying) {
         if (ant.roomId !== "nest") { ant.job = "returning_home"; return; }
@@ -67,7 +81,8 @@
         return;
       }
       if (ant.role === "worker") {
-        const corpse = findNearestRecoverableDeadAnt(ant, 360);
+        const corpseRange = weather.cleanupPriority ? 1400 : 360;
+        const corpse = findNearestRecoverableDeadAnt(ant, corpseRange);
         if (corpse) { ant.targetCorpse = corpse; ant.job = "recovering_dead"; return; }
       }
       const target = findNearestAvailableCrumb(ant, 260);
@@ -76,19 +91,27 @@
     }
 
     function chooseHelperDirection(ant) {
-      if (ant.job === "leaving_nest") pointTowardExit(ant, exits.nestToOverworld);
-      else if (ant.job === "returning_home") pointTowardExit(ant, getHomewardExit(ant.roomId));
-      else if (ant.job === "delivering") ant.angle = Math.atan2(queen.y - ant.y, queen.x - ant.x);
-      else if (ant.job === "delivering_dead") ant.angle = Math.atan2(midden.y - ant.y, midden.x - ant.x);
-      else if (ant.job === "nursing") ant.angle = Math.atan2(queen.y + 92 - ant.y, queen.x - 116 - ant.x) + randomBetween(-0.35, 0.35);
-      else if (ant.job === "moving_to_rest" && ant.restTarget) ant.angle = Math.atan2(ant.restTarget.y - ant.y, ant.restTarget.x - ant.x);
-      else if (ant.job === "resting") ant.angle += Math.sin(performance.now() / 900 + ant.x) * 0.08;
-      else if (ant.job === "attacking_spider" && ant.targetSpider && ant.targetSpider.alive) ant.angle = Math.atan2(ant.targetSpider.y - ant.y, ant.targetSpider.x - ant.x);
-      else if (ant.job === "recovering_dead" && ant.targetCorpse && !ant.targetCorpse.carried) ant.angle = Math.atan2(ant.targetCorpse.y - ant.y, ant.targetCorpse.x - ant.x);
-      else if (ant.job === "foraging" && ant.targetCrumb && !ant.targetCrumb.collected) ant.angle = Math.atan2(ant.targetCrumb.y - ant.y, ant.targetCrumb.x - ant.x);
-      else if (ant.job === "patrolling" && isOutdoorRoom(ant.roomId) && Math.random() < 0.28) pointTowardExit(ant, getRandomRoomExit(ant.roomId));
-      else if (isOutdoorRoom(ant.roomId) && Math.random() < 0.12) pointTowardExit(ant, getRandomRoomExit(ant.roomId));
-      else ant.angle += randomBetween(-1.9, 1.9);
+      if (ant.job === "leaving_nest") ant.targetAngle = Math.atan2(exits.nestToOverworld.y - ant.y, exits.nestToOverworld.x - ant.x);
+      else if (ant.job === "returning_home") {
+        const exit = getHomewardExit(ant.roomId);
+        if (exit) ant.targetAngle = Math.atan2(exit.y - ant.y, exit.x - ant.x);
+      } else if (ant.job === "delivering") ant.targetAngle = Math.atan2(queen.y - ant.y, queen.x - ant.x);
+      else if (ant.job === "delivering_dead") ant.targetAngle = Math.atan2(midden.y - ant.y, midden.x - ant.x);
+      else if (ant.job === "nursing") ant.targetAngle = Math.atan2(queen.y + 92 - ant.y, queen.x - 116 - ant.x) + randomBetween(-0.35, 0.35);
+      else if (ant.job === "moving_to_rest" && ant.restTarget) ant.targetAngle = Math.atan2(ant.restTarget.y - ant.y, ant.restTarget.x - ant.x);
+      else if (ant.job === "resting") ant.targetAngle = ant.angle + Math.sin(performance.now() / 900 + ant.x) * 0.08;
+      else if (ant.job === "attacking_spider" && ant.targetSpider && ant.targetSpider.alive) ant.targetAngle = Math.atan2(ant.targetSpider.y - ant.y, ant.targetSpider.x - ant.x);
+      else if (ant.job === "recovering_dead" && ant.targetCorpse && !ant.targetCorpse.carried) ant.targetAngle = Math.atan2(ant.targetCorpse.y - ant.y, ant.targetCorpse.x - ant.x);
+      else if (ant.job === "foraging" && ant.targetCrumb && !ant.targetCrumb.collected) ant.targetAngle = Math.atan2(ant.targetCrumb.y - ant.y, ant.targetCrumb.x - ant.x);
+      else if (ant.job === "patrolling" && isOutdoorRoom(ant.roomId) && Math.random() < 0.28) {
+        const exit = getRandomRoomExit(ant.roomId);
+        if (exit) ant.targetAngle = Math.atan2(exit.y - ant.y, exit.x - ant.x);
+      } else if (isOutdoorRoom(ant.roomId) && Math.random() < 0.12) {
+        const exit = getRandomRoomExit(ant.roomId);
+        if (exit) ant.targetAngle = Math.atan2(exit.y - ant.y, exit.x - ant.x);
+      } else {
+        ant.targetAngle = ant.angle + randomBetween(-0.8, 0.8);
+      }
     }
 
     function handleHelperForaging(ant) {
@@ -127,6 +150,9 @@
     function handleSoldierCombat(ant, delta) {
       if (ant.role !== "soldier" || ant.job !== "attacking_spider" || !ant.targetSpider || !ant.targetSpider.alive) return;
       if (distance(ant, ant.targetSpider) > ant.radius + ant.targetSpider.radius + 12) return;
+      ant.targetSpider.targetMode = "soldier";
+      ant.targetSpider.targetAntId = ant.id;
+      ant.targetSpider.soldierFocusTimer = 4;
       if (!ant.attackCooldown || ant.attackCooldown <= 0) {
         const team = countSoldiersNearSpider(ant.targetSpider, 95);
         const successChance = clamp(0.28 + team * 0.22, 0.28, 0.92);
@@ -183,8 +209,40 @@
       return nearest;
     }
 
+    function findNearestSoldierForSpider(spider, range) {
+      let nearest = null;
+      let nearestDistance = range;
+      for (const ant of helpers) {
+        if (ant.dead || ant.role !== "soldier" || ant.roomId !== spider.roomId) continue;
+        const d = distance(spider, ant);
+        if (d < nearestDistance) { nearest = ant; nearestDistance = d; }
+      }
+      return nearest;
+    }
+
+    function findDefenseCallTarget() {
+      if (!defenseCall.active || !defenseCall.targetSpiderId) return null;
+      for (const spider of spiders) {
+        if (spider.id !== defenseCall.targetSpiderId || !spider.alive) continue;
+        return spider;
+      }
+      return null;
+    }
+
     function countSoldiersNearSpider(spider, range) {
       return helpers.filter(ant => !ant.dead && ant.role === "soldier" && ant.roomId === spider.roomId && distance(ant, spider) < range).length;
+    }
+
+    function approachAngle(current, target, maxStep) {
+      const delta = normalizeAngle(target - current);
+      if (Math.abs(delta) <= maxStep) return target;
+      return current + Math.sign(delta) * maxStep;
+    }
+
+    function normalizeAngle(angle) {
+      while (angle > Math.PI) angle -= Math.PI * 2;
+      while (angle < -Math.PI) angle += Math.PI * 2;
+      return angle;
     }
 
     function getNestRestSpot(ant) {
