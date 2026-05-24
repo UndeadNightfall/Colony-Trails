@@ -1,7 +1,7 @@
-const CACHE_NAME = "colony-trails-v2";
+const CACHE_NAME = "colony-trails-v3";
 const ASSETS = [
   "./",
-  "./ant_colony_nest_scene.html",
+  "./index.html",
   "./manifest.webmanifest",
   "./title_screen.png",
   "./app_icon.png",
