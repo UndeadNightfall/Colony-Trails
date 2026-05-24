@@ -1,3 +1,5 @@
+    var musicButton = document.getElementById("musicButton");
+
     function setJoystickFromPointer(event) {
       const rect = joystick.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
@@ -18,6 +20,26 @@
     function releaseJoystick(event) { if (input.pointerId !== event.pointerId) return; input.active = false; input.pointerId = null; input.x = 0; input.y = 0; stick.style.transform = "translate(-50%, -50%)"; }
     joystick.addEventListener("pointerup", releaseJoystick);
     joystick.addEventListener("pointercancel", releaseJoystick);
-    actionButton.addEventListener("click", () => { objectiveText.textContent = player.carrying ? "Carry the crumb back to the queen." : "Explore the grass and touch a crumb to pick it up."; });
+    actionButton.addEventListener("click", () => {
+      if (player.carrying === "dead") objectiveText.textContent = "Carry the dead ant body back to the midden.";
+      else if (player.carrying) objectiveText.textContent = "Carry the food back to the queen.";
+      else objectiveText.textContent = "Explore the grass and touch a crumb or dead ant to pick it up.";
+    });
     window.addEventListener("resize", resizeCanvas);
     window.addEventListener("orientationchange", resizeCanvas);
+
+    if (musicButton) {
+      musicButton.addEventListener("pointerup", event => {
+        event.preventDefault();
+        toggleMusic();
+      });
+      musicButton.textContent = musicEnabled ? "Music: On" : "Music: Off";
+    }
+
+    function resetInputControls() {
+      input.active = false;
+      input.pointerId = null;
+      input.x = 0;
+      input.y = 0;
+      if (stick) stick.style.transform = "translate(-50%, -50%)";
+    }

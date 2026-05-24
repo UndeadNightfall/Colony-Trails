@@ -1,12 +1,14 @@
     function getNestObjective() {
-      if (colony.excavation.active) return `Workers are expanding tunnel ${colony.excavation.targetStage}.`;
-      if (colony.eggs.length > 0) return `Egg incubating: ${Math.ceil(colony.eggs[0].time)}s until a ${colony.eggs[0].role} hatches.`;
-      return `Collect ${Math.max(0, colony.crumbsForEgg - colony.food)} more crumb${colony.crumbsForEgg - colony.food === 1 ? "" : "s"} so the queen can lay an egg. Nest capacity: ${getNestCapacity()} ants.`;
+      if (colony.eggs.length > 0 && !colony.eggs[0].inNursery) return "Move the queen's egg to the nursery so it can incubate.";
+      if (colony.eggs.length > 0) return `Egg incubating: ${Math.ceil(colony.eggs[0].time)}s until a ${formatRoleLabel(colony.eggs[0].role)} hatches.`;
+      return `Collect ${Math.max(0, colony.crumbsForEgg - colony.food)} more crumb${colony.crumbsForEgg - colony.food === 1 ? "" : "s"} so the queen can lay an egg.`;
     }
 
     function deliverFood() {
       player.carrying = false;
       colony.food += 1;
+      queen.feedPulse = 1.1;
+      playGiveSound();
       checkEggProduction();
       scheduleCrumbRespawnIfNeeded();
     }
@@ -14,9 +16,10 @@
     function checkEggProduction() {
       if (colony.eggs.length === 0 && colony.food >= colony.crumbsForEgg) {
         colony.food -= colony.crumbsForEgg;
-        colony.eggs.push({ role: chooseEggRole(), time: colony.incubationDuration });
+        colony.eggs.push({ role: chooseEggRole(), time: colony.incubationDuration, inNursery: false, carriedBy: null, x: queen.x + 54, y: queen.y + 20 });
         colony.crumbsForEgg += 1;
-        objectiveText.textContent = `The queen laid an egg. It may hatch into a ${colony.eggs[0].role}.`;
+        queen.layPulse = 1.4;
+        objectiveText.textContent = `The queen laid an egg. Nurses will tend it in the nursery.`;
         saveGame(false);
       } else {
         objectiveText.textContent = getNestObjective();
@@ -25,13 +28,14 @@
 
     function chooseEggRole() {
       const roll = Math.random();
-      if (roll < 0.6) return "worker";
-      if (roll < 0.82) return "soldier";
-      return "nurse";
+      if (roll < 0.56) return "worker";
+      if (roll < 0.74) return "soldier";
+      if (roll < 0.9) return "nurse";
+      return "middenworker";
     }
 
     function updateIncubation(delta) {
-      if (colony.eggs.length <= 0) return;
+      if (colony.eggs.length <= 0 || !colony.eggs[0].inNursery) return;
       colony.eggs[0].time -= delta * getIncubationRate();
       if (colony.eggs[0].time > 0) return;
       const egg = colony.eggs.shift();
@@ -44,37 +48,23 @@
 
     function hatchAnt(role) {
       colony.ants += 1;
-      colony.roles[role] += 1;
+      colony.roles[role] = (colony.roles[role] || 0) + 1;
       spawnColonyAnt(role);
-      const started = updateNestGrowth();
-      objectiveText.textContent = started ? `A ${role} hatched. Workers started expanding tunnel ${colony.excavation.targetStage}.` : `A ${role} hatched. The colony has more help.`;
+      objectiveText.textContent = `A ${formatRoleLabel(role)} hatched. The colony has more help.`;
       saveGame(false);
     }
 
     function updateNestGrowth() {
-      const nextStage = colony.nestStage + 1;
-      if (colony.ants <= getNestCapacity() || nextStage > colony.tunnelCapacity.length || colony.excavation.active || colony.roles.worker < 2) return false;
-      colony.excavation.active = true;
-      colony.excavation.targetStage = nextStage;
-      colony.excavation.progress = 0;
-      return true;
+      return false;
     }
 
     function getNestCapacity() {
-      return colony.tunnelCapacity[colony.nestStage - 1] || colony.tunnelCapacity[colony.tunnelCapacity.length - 1];
+      return 80;
     }
 
     function updateExcavation(delta) {
-      if (!colony.excavation.active) return;
-      colony.excavation.progress += delta * Math.max(1, colony.roles.worker);
-      if (colony.excavation.progress < colony.excavation.duration) return;
-      colony.nestStage = colony.excavation.targetStage;
       colony.excavation.active = false;
       colony.excavation.progress = 0;
-      nest.radius = 145 + (colony.nestStage - 1) * 34;
-      objectiveText.textContent = `Tunnel ${colony.nestStage} is open. The nest has more room to explore.`;
-      updateNestGrowth();
-      saveGame(false);
     }
 
     function spawnHelperAnt() {
@@ -83,11 +73,24 @@
 
     function spawnColonyAnt(role) {
       const stats = getRoleStats(role);
-      helpers.push({ role, x: queen.x + randomBetween(-40, 40), y: queen.y + randomBetween(-35, 35), angle: randomBetween(0, Math.PI * 2), timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, targetCrumb: null, job: role === "nurse" ? "nursing" : "leaving_nest", restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false });
+      const angle = randomBetween(0, Math.PI * 2);
+      helpers.push({ id: nextAntId++, role, health: 3, x: queen.x + randomBetween(-40, 40), y: queen.y + randomBetween(-35, 35), angle, targetAngle: angle, timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, targetCrumb: null, targetCorpse: null, targetSickAnt: null, job: role === "nurse" ? "nursing" : role === "middenworker" ? "midden_patrolling" : "leaving_nest", restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false, restTunnelIndex: null, restSlotIndex: null, sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCarrierId: null, sickCaretakerId: null, sickSourceId: null });
+    }
+
+    function updateQueen(delta) {
+      queen.feedPulse = Math.max(0, queen.feedPulse - delta);
+      queen.layPulse = Math.max(0, queen.layPulse - delta);
+      queen.swayPhase += delta;
     }
 
     function getRoleStats(role) {
-      if (role === "soldier") return { radius: 12, speedMin: 50, speedMax: 66, color: "#4a2114" };
-      if (role === "nurse") return { radius: 9, speedMin: 32, speedMax: 46, color: "#7b4b2f" };
-      return { radius: 10, speedMin: 48, speedMax: 72, color: "#2c140b" };
+      if (role === "soldier") return { radius: 12, speedMin: 50, speedMax: 66, color: "#1d1412" };
+      if (role === "nurse") return { radius: 9, speedMin: 32, speedMax: 46, color: "#251916" };
+      if (role === "middenworker") return { radius: 10, speedMin: 36, speedMax: 50, color: "#2a211d" };
+      return { radius: 10, speedMin: 48, speedMax: 72, color: "#120c0a" };
+    }
+
+    function formatRoleLabel(role) {
+      if (role === "middenworker") return "midden worker";
+      return (role || "").replace(/_/g, " ");
     }

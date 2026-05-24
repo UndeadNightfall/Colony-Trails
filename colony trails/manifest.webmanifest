@@ -2,7 +2,7 @@
   "name": "Colony Trails",
   "short_name": "Colony",
   "description": "A mobile ant colony survival and growth game.",
-  "start_url": "./ant_colony_nest_scene.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",

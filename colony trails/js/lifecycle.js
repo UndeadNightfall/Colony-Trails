@@ -8,6 +8,7 @@
     }
 
     function startGame() {
+      resetGameState();
       generateMapDecorations();
       spawnCrumbs();
       spawnSpiders();
@@ -16,22 +17,27 @@
       requestAnimationFrame(gameLoop);
     }
     function gameLoop(now) {
+      if (!gameStarted) return;
       const delta = Math.min(0.033, (now - lastTime) / 1000);
       lastTime = now;
-      update(delta);
+      if (!gamePaused) update(delta);
       draw();
       requestAnimationFrame(gameLoop);
     }
 
     function update(delta) {
       updatePlayer(delta);
+      updateQueen(delta);
       updateHelpers(delta);
+      updateSickness(delta);
       updateSpiders(delta);
       updateIncubation(delta);
       updateExcavation(delta);
       updateFoodSpawns(delta);
       updateCombatEffects(delta);
+      updateWeather(delta);
       updateAutosave(delta);
+      updateSaveToast(delta);
       updateCamera();
       updateHud();
     }
@@ -43,7 +49,19 @@
       }
     }
     function resetAfterFaint() {
-      deadAnts.push({ roomId: player.roomId, x: player.x, y: player.y, radius: player.radius, role: "worker", carried: false });
+      if (player.carrying === "sick") {
+        const sick = helpers.find(item => item.carried && item.carriedBy === "player" && item.sick);
+        if (sick) {
+          sick.carried = false;
+          sick.carriedBy = null;
+          sick.roomId = player.roomId;
+          sick.x = player.x;
+          sick.y = player.y;
+          sick.atMidden = false;
+          sick.sickCaretakerId = null;
+        }
+      }
+      deadAnts.push(createRecoverableDeadAnt(player.roomId, player.x, player.y, player.radius, "worker"));
       colony.ants = Math.max(0, colony.ants - 1);
       player.roomId = "nest";
       world.room = rooms.nest;
@@ -51,6 +69,15 @@
       player.y = queen.y;
       player.health = 3;
       player.carrying = false;
+      player.sick = false;
+      player.sickTimer = 0;
+      player.sickProgress = 0;
+      player.sickExposure = 0;
+      player.atMidden = false;
+      player.carriedBy = null;
+      player.sickCaretakerId = null;
+      player.sickCarrierId = null;
+      player.sickSourceId = null;
       objectiveText.textContent = colony.ants > 0 ? "Another ant takes your place at the queen. Workers will recover the fallen body." : "The last ant has fallen. The queen waits, but the colony has no workers left.";
       saveGame(false);
     }
@@ -67,6 +94,6 @@
       roomDisplay.textContent = `Room: ${world.room.name}`;
       foodDisplay.textContent = colony.eggs.length > 0 ? `Egg: ${Math.ceil(colony.eggs[0].time)}s ${colony.eggs[0].role}` : `Food: ${colony.food}/${colony.crumbsForEgg}`;
       colonyDisplay.textContent = `Colony: ${colony.ants}`;
-      healthDisplay.textContent = `Health: ${player.health}`;
+      healthDisplay.textContent = player.sick ? `Health: ${player.health} Sick` : `Health: ${player.health}`;
       actionButton.textContent = player.carrying ? "Carry" : "Find";
     }

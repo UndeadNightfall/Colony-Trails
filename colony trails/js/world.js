@@ -83,9 +83,9 @@
 
     function spawnSpiders() {
       spiders.length = 0;
-      spiders.push({ roomId: "overworld", x: 1040, y: 510, homeX: 1040, homeY: 510, radius: 24, angle: 0, speed: 70, aggro: false, alive: true, respawnTimer: 0 });
-      spiders.push({ roomId: "sandpit", x: 920, y: 420, homeX: 920, homeY: 420, radius: 24, angle: 2, speed: 62, aggro: false, alive: true, respawnTimer: 0 });
-      spiders.push({ roomId: "garden", x: 720, y: 650, homeX: 720, homeY: 650, radius: 24, angle: 1, speed: 64, aggro: false, alive: true, respawnTimer: 0 });
+      spiders.push({ id: 1, roomId: "overworld", x: 1040, y: 510, homeX: 1040, homeY: 510, radius: 24, angle: 0, speed: 70, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
+      spiders.push({ id: 2, roomId: "sandpit", x: 920, y: 420, homeX: 920, homeY: 420, radius: 24, angle: 2, speed: 62, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
+      spiders.push({ id: 3, roomId: "garden", x: 720, y: 650, homeX: 720, homeY: 650, radius: 24, angle: 1, speed: 64, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
     }
     function handleRoomTransitions(entity) {
       for (const exit of getRoomExits(entity.roomId)) {
@@ -103,7 +103,8 @@
 
     function getRoomObjective(roomId) {
       if (roomId === "nest") return player.carrying ? "Bring the crumb to the queen." : getNestObjective();
-      if (roomId === "patio") return "Search the concrete patio. Crumbs collect near chairs and doorways.";
+      if (roomId === "patio") return "Search the concrete patio. The house beside it is a dry shelter when rain starts.";
+      if (roomId === "house") return "The house stays dry. Shelter here when rain starts, then return to the yard when it passes.";
       if (roomId === "sandpit") return "Cross the sandpit carefully. The open sand slows the search and hides crumbs.";
       if (roomId === "garden") return "Explore the garden bed. Pots, soil, and roots make this a dense foraging room.";
       return "Explore the backyard paths. Use exits to reach the patio, sandpit, and garden bed.";
@@ -111,6 +112,7 @@
     function drawGround() {
       const room = rooms[player.roomId];
       if (room.ground === "patio") drawPatioGround(room);
+      else if (room.ground === "house") drawHouseGround(room);
       else if (room.ground === "sand") drawSandpitGround(room);
       else if (room.ground === "soil") drawGardenGround(room);
       else drawBackyardGround(room);
@@ -130,6 +132,26 @@
       ctx.lineWidth = 2;
       for (let x = 90; x < room.width; x += 95) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - 28, room.height); ctx.stroke(); }
       for (let y = 82; y < room.height; y += 82) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(room.width, y); ctx.stroke(); }
+    }
+
+    function drawHouseGround(room) {
+      ctx.fillStyle = "#8c7764";
+      ctx.fillRect(0, 0, room.width, room.height);
+      ctx.fillStyle = "#7a6553";
+      for (let y = 0; y < room.height; y += 60) {
+        for (let x = 0; x < room.width; x += 150) {
+          ctx.fillRect(x, y, 150, 60);
+        }
+      }
+      ctx.strokeStyle = "rgba(40, 27, 20, 0.2)";
+      ctx.lineWidth = 2;
+      for (let x = 0; x < room.width; x += 150) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, room.height); ctx.stroke(); }
+      for (let y = 0; y < room.height; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(room.width, y); ctx.stroke(); }
+      ctx.fillStyle = "rgba(255, 238, 214, 0.08)";
+      ctx.fillRect(0, 0, room.width, room.height);
+      ctx.fillStyle = "rgba(0,0,0,0.14)";
+      ctx.fillRect(0, 0, room.width, 24);
+      ctx.fillRect(0, room.height - 24, room.width, 24);
     }
 
     function drawSandpitGround(room) {
@@ -173,6 +195,11 @@
           ctx.stroke();
           if (item.name === "fallen rake") drawRakeDetails(item);
           if (item.name === "patio chair") drawChairDetails(item);
+          if (item.name === "sofa") drawSofaDetails(item);
+          if (item.name === "coffee table") drawCoffeeTableDetails(item);
+          if (item.name === "dining table") drawDiningTableDetails(item);
+          if (item.name === "rug") drawRugDetails(item);
+          if (item.name === "bookshelf") drawBookshelfDetails(item);
           if (item.name === "fence board") drawBoardDetails(item);
         } else {
           ctx.beginPath();
@@ -182,6 +209,8 @@
           if (item.name === "soccer ball") drawSoccerBallDetails(item);
           if (item.name === "plant pot") drawPlantPotDetails(item);
           if (item.name === "watering can") drawWateringCanDetails(item);
+          if (item.name === "potted plant") drawPottedPlantDetails(item);
+          if (item.name === "lamp") drawLampDetails(item);
           if (item.name === "garden light") drawGardenLightDetails(item);
         }
         ctx.restore();
@@ -192,8 +221,38 @@
     }
 
     function drawExit(x, y, radius, label) {
-      ctx.fillStyle = "rgba(43, 24, 13, 0.92)"; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = "rgba(255, 213, 142, 0.3)"; ctx.lineWidth = 5; ctx.stroke();
+      const moundW = radius * 1.9;
+      const moundH = radius * 1.25;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin((x + y) * 0.02) * 0.06);
+      ctx.fillStyle = "rgba(72, 44, 25, 0.95)";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, moundW, moundH, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(97, 63, 36, 0.98)";
+      ctx.beginPath();
+      ctx.ellipse(0, 1, moundW * 0.82, moundH * 0.78, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(21, 10, 7, 0.96)";
+      ctx.beginPath();
+      ctx.ellipse(0, 1, radius * 0.7, radius * 0.52, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 224, 168, 0.18)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 1, radius * 0.7, radius * 0.52, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(52, 30, 16, 0.42)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        const a = -1.1 + i * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * moundW * 0.65, Math.sin(a) * moundH * 0.28);
+        ctx.lineTo(Math.cos(a) * moundW * 0.9, Math.sin(a) * moundH * 0.38 + 2);
+        ctx.stroke();
+      }
+      ctx.restore();
       drawText(label, x, y - radius - 14);
     }
 
