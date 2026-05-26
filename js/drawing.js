@@ -319,8 +319,8 @@
     function drawCrumbs() {
       for (const crumb of crumbs) {
         if (crumb.collected || crumb.roomId !== player.roomId) continue;
-        ctx.fillStyle = "#e4b55e"; ctx.beginPath(); ctx.ellipse(crumb.x, crumb.y, crumb.radius, crumb.radius * 0.75, 0.4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.beginPath(); ctx.arc(crumb.x - 5, crumb.y - 4, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = typeof getCrumbColor === "function" ? getCrumbColor(crumb) : "#e4b55e"; ctx.beginPath(); ctx.ellipse(crumb.x, crumb.y, crumb.radius, crumb.radius * 0.75, 0.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = typeof getCrumbHighlight === "function" ? getCrumbHighlight(crumb) : "rgba(255,255,255,0.18)"; ctx.beginPath(); ctx.arc(crumb.x - 5, crumb.y - 4, 4, 0, Math.PI * 2); ctx.fill();
       }
     }
 
@@ -387,10 +387,10 @@
       }
     }
 
-    function drawHelpers() { for (const ant of helpers) if (!ant.dead && !ant.carriedBy && ant.roomId === player.roomId) drawAnt(ant.x, ant.y, ant.angle, ant.radius, getRoleStats(ant.role || "worker").color, ant.carrying, ant.role, ant.job, ant.sick); }
-    function drawPlayer() { const flash = player.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0; if (!flash) drawAnt(player.x, player.y, player.angle, player.radius, "#120c0a", player.carrying, "worker", "", player.sick); }
+    function drawHelpers() { for (const ant of helpers) if (!ant.dead && !ant.carriedBy && ant.roomId === player.roomId) drawAnt(ant.x, ant.y, ant.angle, ant.radius, getRoleStats(ant.role || "worker").color, ant.carrying, ant.role, ant.job, ant.sick, ant.carryingFood); }
+    function drawPlayer() { const flash = player.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0; if (!flash) drawAnt(player.x, player.y, player.angle, player.radius, "#120c0a", player.carrying, "worker", "", player.sick, player.carryingFood); }
 
-    function drawAnt(x, y, angle, size, color, carrying, role = "worker", job = "", sick = false) {
+    function drawAnt(x, y, angle, size, color, carrying, role = "worker", job = "", sick = false, carryingFood = []) {
       const walk = performance.now() / 130 + x * 0.03 + y * 0.02;
       ctx.save(); ctx.translate(x, y); ctx.rotate(angle + Math.PI);
       ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.ellipse(0, size * 0.8, size * 1.35, size * 0.45, 0, 0, Math.PI * 2); ctx.fill();
@@ -450,6 +450,17 @@
           ctx.arc(-size * 1.15 + Math.cos(a) * 7, Math.sin(a) * 4, 1.8, 0, Math.PI * 2);
           ctx.fill();
         }
+      } else if (role === "storageworker") {
+        ctx.strokeStyle = "rgba(238, 176, 82, 0.45)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(size * 0.88, 0, size * 0.82, -0.7, 0.7);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(230, 173, 86, 0.72)";
+        ctx.beginPath();
+        ctx.ellipse(size * 1.34, -size * 0.24, size * 0.22, size * 0.15, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(size * 1.34, size * 0.24, size * 0.22, size * 0.15, -0.2, 0, Math.PI * 2);
+        ctx.fill();
       } else if (role === "middenworker" && (job === "cleaning_midden" || job === "healing_midden" || job === "waiting_midden" || job === "fussing_player")) {
         ctx.strokeStyle = "rgba(162, 230, 142, 0.32)";
         ctx.lineWidth = 2;
@@ -483,8 +494,21 @@
       if (carrying === "dead") drawDeadAnt(-size * 1.8, 0, size * 0.58);
       else if (carrying === "sick") { ctx.fillStyle = "rgba(121, 201, 102, 0.78)"; ctx.beginPath(); ctx.ellipse(-size * 1.8, 0, size * 0.55, size * 0.42, 0, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "rgba(43, 82, 31, 0.5)"; ctx.lineWidth = 2; ctx.stroke(); }
       else if (carrying === "egg") { ctx.fillStyle = "#f7dfaa"; ctx.beginPath(); ctx.ellipse(-size * 1.8, 0, size * 0.5, size * 0.72, 0, 0, Math.PI * 2); ctx.fill(); }
-      else if (carrying) { ctx.fillStyle = "#e5b45d"; ctx.beginPath(); ctx.ellipse(-size * 1.8, 0, size * 0.55, size * 0.42, 0, 0, Math.PI * 2); ctx.fill(); }
+      else if (carrying === "food") drawCarriedFoodStack(size, carryingFood);
+      else if (carrying === "queen_food") drawCarriedFoodStack(size, [carryingFood]);
       ctx.restore();
+    }
+
+    function drawCarriedFoodStack(size, carrying) {
+      const items = Array.isArray(carrying) ? carrying : [];
+      const count = Math.max(1, Math.min(3, items.length || 1));
+      for (let i = 0; i < count; i++) {
+        const food = items[i] || null;
+        ctx.fillStyle = food?.color || "#e5b45d";
+        ctx.beginPath();
+        ctx.ellipse(-size * 1.75 - i * size * 0.28, (i - 1) * size * 0.28, size * 0.46, size * 0.34, i * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     function drawQueen(x, y, scale) {

@@ -40,10 +40,11 @@
     var world = { room: rooms.nest, cameraX: 0, cameraY: 0 };
     var input = { x: 0, y: 0, active: false, pointerId: null };
 
-    var player = { x: 1180, y: 980, radius: 14, speed: 190, angle: 0, carrying: false, health: 3, invulnerable: 0, roomId: "nest", sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCaretakerId: null, sickCarrierId: null, sickSourceId: null, middenHealProgress: 0, middenCaretakerId: null };
+    var player = { x: 1180, y: 980, radius: 14, speed: 190, angle: 0, carrying: false, carryingFood: [], health: 3, invulnerable: 0, roomId: "nest", sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCaretakerId: null, sickCarrierId: null, sickSourceId: null, middenHealProgress: 0, middenCaretakerId: null };
     var queen = { x: 1050, y: 980, radius: 48, roomId: "nest", feedPulse: 0, layPulse: 0, swayPhase: 0 };
-    var nursery = { x: 650, y: 760, rx: 132, ry: 78, roomId: "nest" };
+    var nursery = { x: 650, y: 760, radius: 96, rx: 96, ry: 96, roomId: "nest" };
     var nest = { x: 1080, y: 520, radius: 82, roomId: "nest" };
+    var storage = { x: 1390, y: 610, radius: 88, roomId: "nest" };
 
     var exits = {
       nestToOverworld: { roomId: "nest", x: 1120, y: 92, radius: 48, to: "overworld", toX: 220, toY: 590, label: "Exit" },
@@ -60,13 +61,17 @@
 
     var colony = {
       food: 0,
-      ants: 2,
+      storagePile: [],
+      storagePiles: {},
+      queenFeedTimer: 30,
+      queenHungry: false,
+      ants: 5,
       eggs: [],
-      crumbsForEgg: 3,
+      crumbsForEgg: 5,
       incubationDuration: 18,
       nestStage: 4,
       tunnelCapacity: [80],
-      roles: { worker: 1, soldier: 0, nurse: 0, middenworker: 0 },
+      roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 1 },
       recoveredDead: 0,
       excavation: { active: false, targetStage: 4, progress: 0, duration: 0 }
     };
@@ -78,6 +83,11 @@
     var grassClumps = [];
     var seasonFlowers = [];
     var pebbles = [];
+    var gardenPuddles = [
+      { x: 500, y: 245, radius: 56, rx: 78, ry: 38, angle: -0.18 },
+      { x: 1015, y: 365, radius: 54, rx: 72, ry: 36, angle: 0.22 },
+      { x: 1190, y: 735, radius: 58, rx: 78, ry: 40, angle: -0.08 }
+    ];
     var foodSpawn = {
       timer: 0,
       interval: 5,
@@ -117,7 +127,7 @@
     ];
 
     var lastTime = performance.now();
-    var midden = { x: 1390, y: 350, radius: 72 };
+    var midden = { x: 1390, y: 350, radius: 78 };
     var saveState = { autosaveTimer: 0 };
     var gamePaused = false;
     var musicEnabled = true;
@@ -153,7 +163,8 @@
         worker: roles.worker || 0,
         soldier: roles.soldier || 0,
         nurse: roles.nurse || 0,
-        middenworker: roles.middenworker || 0
+        middenworker: roles.middenworker || 0,
+        storageworker: roles.storageworker || 0
       };
     }
 
@@ -167,6 +178,7 @@
         <div class="dropdown-row"><span>Soldiers</span><span>${counts.soldier}</span></div>
         <div class="dropdown-row"><span>Nurses</span><span>${counts.nurse}</span></div>
         <div class="dropdown-row"><span>Midden workers</span><span>${counts.middenworker}</span></div>
+        <div class="dropdown-row"><span>Storage workers</span><span>${counts.storageworker}</span></div>
       `;
     }
 
@@ -212,19 +224,24 @@
       input.y = 0;
       input.active = false;
       input.pointerId = null;
-      Object.assign(player, { x: 1180, y: 980, radius: 14, speed: 190, angle: 0, carrying: false, health: 3, invulnerable: 0, roomId: "nest", sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCaretakerId: null, sickCarrierId: null, sickSourceId: null, middenHealProgress: 0, middenCaretakerId: null });
+      Object.assign(player, { x: 1180, y: 980, radius: 14, speed: 190, angle: 0, carrying: false, carryingFood: [], health: 3, invulnerable: 0, roomId: "nest", sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCaretakerId: null, sickCarrierId: null, sickSourceId: null, middenHealProgress: 0, middenCaretakerId: null });
       Object.assign(queen, { x: 1050, y: 980, radius: 48, roomId: "nest", feedPulse: 0, layPulse: 0, swayPhase: 0 });
-      Object.assign(nursery, { x: 650, y: 760, rx: 132, ry: 78, roomId: "nest" });
+      Object.assign(nursery, { x: 650, y: 760, radius: 96, rx: 96, ry: 96, roomId: "nest" });
       Object.assign(nest, { x: 1080, y: 520, radius: 82, roomId: "nest" });
+      Object.assign(storage, { x: 1390, y: 610, radius: 88, roomId: "nest" });
       Object.assign(colony, {
         food: 0,
-        ants: 2,
+        storagePile: [],
+        storagePiles: {},
+        queenFeedTimer: 30,
+        queenHungry: false,
+        ants: 5,
         eggs: [],
-        crumbsForEgg: 3,
+        crumbsForEgg: 5,
         incubationDuration: 18,
         nestStage: 4,
         tunnelCapacity: [80],
-        roles: { worker: 1, soldier: 0, nurse: 0, middenworker: 0 },
+        roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 1 },
         recoveredDead: 0,
         excavation: { active: false, targetStage: 4, progress: 0, duration: 0 }
       });

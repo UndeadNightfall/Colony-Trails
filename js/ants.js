@@ -115,6 +115,7 @@
         const ant = helpers[i];
         if (ant.dead) { helpers.splice(i, 1); continue; }
         normalizeSicknessState(ant);
+        normalizeAntHungerState(ant);
         if (ant.carriedBy) continue;
         if (ant.roomId === "nest" && ((!isNestWalkable(ant.x, ant.y, ant.radius)) || (ant.nestBlockedCount || 0) >= 3)) {
           recoverNestEntityPosition(ant, ant.x, ant.y);
@@ -124,6 +125,7 @@
           ant.nestBlockedCount = 0;
         }
         updateAntRestState(ant, delta);
+        updateAntHungerState(ant, delta);
         updateHelperJob(ant);
         if (ant.job === "moving_to_rest" || ant.job === "resting") {
           chooseHelperDirection(ant);
@@ -138,7 +140,8 @@
         const oldY = ant.y;
         const inNursery = ant.role === "nurse" && distance(ant, nursery) < nursery.rx * 0.68;
         const inMidden = ant.role === "middenworker" && distance(ant, midden) < midden.radius + 20;
-        const moveSpeed = ant.job === "resting" || ant.atMidden ? 0 : ((ant.role === "nurse" && ant.job === "nursing" && inNursery) || (ant.role === "middenworker" && (ant.job === "midden_patrolling" || ant.job === "waiting_midden") && inMidden) ? 0 : ant.speed * (ant.sick && !ant.atMidden ? 0.62 : 1));
+        const inStorage = ant.role === "storageworker" && distance(ant, storage) < storage.radius * 0.7;
+        const moveSpeed = ant.job === "resting" || ant.atMidden ? 0 : ((ant.role === "nurse" && ant.job === "nursing" && inNursery) || (ant.role === "middenworker" && (ant.job === "midden_patrolling" || ant.job === "waiting_midden") && inMidden) || (ant.job === "storage_patrolling" && inStorage) ? 0 : ant.speed * (ant.sick && !ant.atMidden ? 0.62 : 1));
         const blocked = moveNestEntity(ant, Math.cos(ant.angle) * moveSpeed * delta, Math.sin(ant.angle) * moveSpeed * delta);
         const room = rooms[ant.roomId];
         ant.x = clamp(ant.x, 30, room.width - 30);
@@ -172,7 +175,7 @@
           ant.nestBlockedCount = 0;
         }
         const nestMoved = Math.hypot(ant.x - oldX, ant.y - oldY);
-        if (ant.roomId === "nest" && ant.job !== "resting" && !ant.carrying) {
+        if (ant.roomId === "nest" && shouldUseNestStuckRecovery(ant)) {
           if (nestMoved < 0.08) {
             ant.nestStuckTime = (ant.nestStuckTime || 0) + delta;
             if (ant.nestStuckTime >= 1.5) hardResetNestAnt(ant, oldX, oldY);
@@ -213,14 +216,34 @@
         if (ant.role === "nurse") ant.job = "nursing";
         else if (ant.role === "middenworker") ant.job = "midden_patrolling";
         else if (ant.role === "soldier") ant.job = "leaving_nest";
+        else if (ant.role === "storageworker") ant.job = "storage_patrolling";
         else if (ant.role === "worker") ant.job = "leaving_nest";
+        ant.returnJobAfterMeal = null;
       }
       ant.timer = randomBetween(0.15, 0.45);
       ant.targetAngle = ant.angle + randomBetween(-0.4, 0.4);
     }
 
+    function shouldUseNestStuckRecovery(ant) {
+      return ant.job === "leaving_nest" ||
+        ant.job === "returning_home" ||
+        ant.job === "delivering" ||
+        ant.job === "delivering_dead" ||
+        ant.job === "delivering_sick" ||
+        ant.job === "delivering_egg" ||
+        ant.job === "delivering_queen_food" ||
+        ant.job === "going_to_storage_food" ||
+        ant.job === "sorting_storage" ||
+        ant.job === "taking_queen_food" ||
+        (ant.job === "storage_patrolling" && distance(ant, storage) >= storage.radius * 0.7) ||
+        ant.job === "moving_to_rest" ||
+        ant.job === "recovering_sick" ||
+        ant.job === "recovering_dead" ||
+        ant.job === "recovering_egg";
+    }
+
     function updateAntRestState(ant, delta) {
-      if (ant.role === "nurse" || ant.role === "middenworker") {
+      if (ant.role === "nurse" || ant.role === "middenworker" || ant.role === "storageworker") {
         ant.needsRest = false;
         ant.restTarget = null;
         ant.restTunnelIndex = null;
@@ -266,6 +289,75 @@
       }
     }
 
+    function normalizeAntHungerState(ant) {
+      if (typeof ant.hungerTimer !== "number") ant.hungerTimer = getNextAntHungerInterval(ant, true);
+      if (typeof ant.eatTimer !== "number") ant.eatTimer = 0;
+      if (typeof ant.returnJobAfterMeal === "undefined") ant.returnJobAfterMeal = null;
+    }
+
+    function updateAntHungerState(ant, delta) {
+      if (ant.dead || ant.carriedBy || ant.sick || ant.atMidden) return;
+      if (ant.job === "eating_storage_food") {
+        ant.eatTimer -= delta;
+        if (ant.eatTimer > 0) return;
+        finishAntMeal(ant);
+        return;
+      }
+      if (ant.job === "going_to_storage_food") return;
+      if (!canTrackAntMealNeed(ant)) return;
+      ant.hungerTimer -= delta;
+      if (ant.hungerTimer > 0 || getStoragePileCount() <= 0) return;
+      if (ant.roomId !== "nest") {
+        ant.returnJobAfterMeal = getMealReturnJob(ant);
+        ant.job = "returning_home";
+        ant.timer = randomBetween(0.05, 0.2);
+        return;
+      }
+      if (!canInterruptForAntMeal(ant)) return;
+      ant.returnJobAfterMeal = getMealReturnJob(ant);
+      ant.job = "going_to_storage_food";
+      ant.nestRouteKey = null;
+      ant.nestRoute = null;
+      ant.nestRouteIndex = 0;
+      ant.timer = randomBetween(0.05, 0.2);
+    }
+
+    function canTrackAntMealNeed(ant) {
+      if (ant.carrying || ant.needsRest || ant.sick || ant.atMidden) return false;
+      if (ant.job === "attacking_spider" || ant.job === "recovering_sick" || ant.job === "recovering_dead" || ant.job === "recovering_egg") return false;
+      if (ant.job === "delivering_dead" || ant.job === "delivering_sick" || ant.job === "delivering_egg" || ant.job === "delivering_queen_food") return false;
+      if (ant.role === "storageworker" && (colony.queenHungry || Array.isArray(colony.storagePile) && colony.storagePile.length > 0)) return false;
+      return true;
+    }
+
+    function canInterruptForAntMeal(ant) {
+      return ant.roomId === "nest" && canTrackAntMealNeed(ant);
+    }
+
+    function getMealReturnJob(ant) {
+      if (ant.role === "nurse") return "nursing";
+      if (ant.role === "middenworker") return "midden_patrolling";
+      if (ant.role === "storageworker") return "storage_patrolling";
+      if (ant.role === "soldier") return "leaving_nest";
+      return "leaving_nest";
+    }
+
+    function finishAntMeal(ant) {
+      ant.eatTimer = 0;
+      ant.hungerTimer = getNextAntHungerInterval(ant);
+      ant.job = ant.returnJobAfterMeal || getMealReturnJob(ant);
+      ant.returnJobAfterMeal = null;
+      ant.nestRouteKey = null;
+      ant.nestRoute = null;
+      ant.nestRouteIndex = 0;
+    }
+
+    function getNextAntHungerInterval(ant, initial = false) {
+      const offset = ((ant.id || 1) * 17) % 37;
+      const base = randomBetween(75, 130) + offset;
+      return initial ? randomBetween(20, base) : base;
+    }
+
     function updateHelperJob(ant) {
       if (ant.role === "soldier" && ant.targetSpider && (!ant.targetSpider.alive || ant.targetSpider.roomId !== ant.roomId)) {
         ant.targetSpider = null;
@@ -286,6 +378,11 @@
           ant.job = "attacking_spider";
           return;
         }
+      }
+      if (ant.job === "going_to_storage_food" || ant.job === "eating_storage_food") return;
+      if (ant.hungerTimer <= 0 && ant.roomId !== "nest" && getStoragePileCount() > 0 && canTrackAntMealNeed(ant)) {
+        ant.job = "returning_home";
+        return;
       }
       if (ant.needsRest && !ant.carrying) {
         if (ant.roomId !== "nest") { ant.job = "returning_home"; return; }
@@ -337,10 +434,26 @@
         ant.job = "midden_patrolling";
         return;
       }
+      if (ant.role === "storageworker") {
+        if (ant.roomId !== "nest") { ant.job = "returning_home"; return; }
+        if (ant.carrying === "queen_food") { ant.job = "delivering_queen_food"; return; }
+        if (colony.queenHungry && hasSortedFoodForQueen()) {
+          ant.targetStorageType = getAvailableQueenFoodType();
+          ant.job = "taking_queen_food";
+          return;
+        }
+        if (Array.isArray(colony.storagePile) && colony.storagePile.length > 0) {
+          ant.job = "sorting_storage";
+          return;
+        }
+        ant.job = "storage_patrolling";
+        return;
+      }
+      if (ant.carrying === "food" && getCarriedFoodCount(ant) >= getFoodCarryLimit()) { ant.job = ant.roomId === "nest" ? "delivering" : "returning_home"; return; }
       if (ant.carrying === "dead") { ant.job = ant.roomId === "nest" ? "delivering_dead" : "returning_home"; return; }
       if (ant.carrying === "sick") { ant.job = ant.roomId === "nest" ? "delivering_sick" : "returning_home"; return; }
       if (ant.carrying === "egg") { ant.job = ant.roomId === "nest" ? "delivering_egg" : "returning_home"; return; }
-      if (ant.carrying) { ant.job = ant.roomId === "nest" ? "delivering" : "returning_home"; return; }
+      if (ant.carrying && ant.carrying !== "food") { ant.job = ant.roomId === "nest" ? "delivering" : "returning_home"; return; }
       if (ant.role === "middenworker" && playerNeedsMiddenCare) {
         const playerMiddenCaretaker = getPlayerMiddenCaretaker() || claimPlayerMiddenWorker();
         if (playerMiddenCaretaker) {
@@ -353,6 +466,7 @@
         ant.targetCrumb = null;
         ant.targetCorpse = null;
         ant.targetSickAnt = null;
+        if (ant.role === "worker" && (!ant.targetForageRoom || Math.random() < 0.18)) ant.targetForageRoom = chooseForageRoom(ant);
         ant.job = weather.active ? "roaming" : "leaving_nest";
         return;
       }
@@ -364,19 +478,25 @@
         return;
       }
       if (ant.role === "worker") {
-        const sickAnt = findNearestRecoverableSickAnt(ant, 720);
+        const sickAnt = !ant.carrying ? findNearestRecoverableSickAnt(ant, 720) : null;
         if (sickAnt) { ant.targetSickAnt = sickAnt; ant.job = "recovering_sick"; return; }
         const corpseRange = weather.cleanupPriority ? 1400 : 360;
-        const corpse = findNearestRecoverableDeadAnt(ant, corpseRange);
+        const corpse = !ant.carrying ? findNearestRecoverableDeadAnt(ant, corpseRange) : null;
         if (corpse) { ant.targetCorpse = corpse; ant.job = "recovering_dead"; return; }
-        const crumbRange = isOutdoorRoom(ant.roomId) ? 1200 : 520;
+        const crumbRange = isOutdoorRoom(ant.roomId) ? 1800 : 520;
         const target = isOutdoorRoom(ant.roomId) ? findNearestTrailReachableCrumb(ant, crumbRange) : findNearestAvailableCrumb(ant, crumbRange);
         if (target) {
           ant.targetCrumb = target;
+          ant.targetForageRoom = null;
           ant.job = "foraging";
           return;
         }
         ant.targetCrumb = null;
+        if (ant.carrying === "food" && getCarriedFoodCount(ant) > 0 && countAllAvailableCrumbs() === 0) {
+          ant.job = ant.roomId === "nest" ? "delivering" : "returning_home";
+          return;
+        }
+        if (!ant.targetForageRoom || ant.targetForageRoom === ant.roomId || Math.random() < 0.12) ant.targetForageRoom = chooseForageRoom(ant);
         ant.job = isOutdoorRoom(ant.roomId) ? "exploring" : "leaving_nest";
         return;
       }
@@ -390,7 +510,7 @@
       else if (ant.job === "returning_home") {
         const exit = getHomewardExit(ant.roomId);
         if (exit) pointAlongOutdoorTrail(ant, exit);
-      } else if (ant.job === "delivering") pointAlongNestRoute(ant, queen);
+      } else if (ant.job === "delivering") pointAlongNestRoute(ant, storage);
       else if (ant.job === "delivering_dead") pointAlongNestRoute(ant, midden);
       else if (ant.job === "delivering_sick") pointAlongNestRoute(ant, midden);
       else if (ant.job === "delivering_egg") pointAlongNestRoute(ant, nursery);
@@ -417,6 +537,15 @@
         pointAlongNestRoute(ant, patrolPoint);
         ant.targetAngle += Math.sin(performance.now() / 700 + ant.x) * 0.12;
       }
+      else if (ant.job === "storage_patrolling") {
+        pointAlongNestRoute(ant, getStorageWorkPoint(ant));
+        ant.targetAngle += Math.sin(performance.now() / 680 + ant.x) * 0.12;
+      }
+      else if (ant.job === "going_to_storage_food") pointAlongNestRoute(ant, getStorageMealPoint(ant));
+      else if (ant.job === "eating_storage_food") ant.targetAngle = ant.angle;
+      else if (ant.job === "sorting_storage") pointAlongNestRoute(ant, getStorageCentralPoint());
+      else if (ant.job === "taking_queen_food") pointAlongNestRoute(ant, getStoragePilePoint(ant.targetStorageType || getAvailableQueenFoodType() || "seed"));
+      else if (ant.job === "delivering_queen_food") pointAlongNestRoute(ant, queen);
       else if (ant.job === "attacking_spider" && ant.targetSpider && ant.targetSpider.alive && ant.targetSpider.roomId === ant.roomId) ant.targetAngle = Math.atan2(ant.targetSpider.y - ant.y, ant.targetSpider.x - ant.x);
       else if (ant.job === "retreating") pointAlongOutdoorTrail(ant, getWorkerRetreatPoint(ant));
       else if (ant.job === "recovering_sick" && ant.targetSickAnt && !ant.targetSickAnt.atMidden) pointAlongNestRoute(ant, ant.targetSickAnt);
@@ -424,7 +553,8 @@
       else if (ant.job === "foraging" && ant.targetCrumb && !ant.targetCrumb.collected) ant.targetAngle = Math.atan2(ant.targetCrumb.y - ant.y, ant.targetCrumb.x - ant.x);
       else if (ant.job === "recovering_egg" && ant.targetEgg && !ant.targetEgg.carriedBy) pointAlongNestRoute(ant, ant.targetEgg);
       else if (ant.job === "exploring" && isOutdoorRoom(ant.roomId)) {
-        pointAlongOutdoorTrail(ant, getSafeOutdoorRoamPoint(ant));
+        const forageExit = getForageTravelExit(ant);
+        pointAlongOutdoorTrail(ant, forageExit || getSafeOutdoorRoamPoint(ant));
       }
       else if (ant.job === "patrolling" && isOutdoorRoom(ant.roomId)) {
         pointAlongOutdoorTrail(ant, getSafeOutdoorPatrolPoint(ant));
@@ -452,11 +582,11 @@
         ant.carrying = "dead";
         pointTowardExit(ant, getHomewardExit(ant.roomId));
       }
-      if (isOutdoorRoom(ant.roomId) && !ant.carrying && ant.targetCrumb && ant.targetCrumb.roomId === ant.roomId && !ant.targetCrumb.collected && distance(ant, ant.targetCrumb) < ant.radius + ant.targetCrumb.radius + 6) {
+      if (isOutdoorRoom(ant.roomId) && canCarryMoreFood(ant) && ant.targetCrumb && ant.targetCrumb.roomId === ant.roomId && !ant.targetCrumb.collected && distance(ant, ant.targetCrumb) < ant.radius + ant.targetCrumb.radius + 6) {
+        addFoodToCarrier(ant, ant.targetCrumb);
         ant.targetCrumb.collected = true;
-        ant.carrying = "food";
         ant.targetCrumb = null;
-        pointTowardExit(ant, getHomewardExit(ant.roomId));
+        if (getCarriedFoodCount(ant) >= getFoodCarryLimit()) pointTowardExit(ant, getHomewardExit(ant.roomId));
       }
       if (ant.roomId === "nest" && ant.carrying === "dead" && distance(ant, midden) < midden.radius + 18) {
         if (ant.targetCorpse) {
@@ -503,13 +633,44 @@
         objectiveText.textContent = "An ant carried the queen's egg to the nursery.";
         saveGame(false);
       }
-      if (ant.roomId === "nest" && ant.carrying && distance(ant, queen) < queen.radius + 34) {
-        if (ant.carrying !== "food") return;
-        ant.carrying = false;
-        colony.food += 1;
-        objectiveText.textContent = "A worker brought food home for the queen.";
-        checkEggProduction();
+      if (ant.roomId === "nest" && ant.carrying === "food" && distance(ant, storage) < storage.radius + 18) {
+        depositFoodToStorage(ant);
+        objectiveText.textContent = "A worker dropped food in the storage room.";
         scheduleCrumbRespawnIfNeeded();
+        saveGame(false);
+      }
+      if (ant.roomId === "nest" && ant.job === "going_to_storage_food" && distance(ant, getStorageMealPoint(ant)) < ant.radius + 16) {
+        const meal = takeFoodForAntMeal();
+        if (meal) {
+          ant.job = "eating_storage_food";
+          ant.eatTimer = randomBetween(2.2, 4.2);
+          objectiveText.textContent = `A ${formatRoleLabel(ant.role)} ate from storage.`;
+          saveGame(false);
+        } else {
+          finishAntMeal(ant);
+        }
+      }
+      if (ant.role === "storageworker" && ant.roomId === "nest" && ant.job === "sorting_storage" && !ant.carrying && distance(ant, getStorageCentralPoint()) < ant.radius + 18) {
+        const food = sortOneStoredFood();
+        if (food) {
+          ant.targetStorageType = food.type || "seed";
+          objectiveText.textContent = "A storage worker sorted food by colour.";
+        }
+      }
+      if (ant.role === "storageworker" && ant.roomId === "nest" && ant.job === "taking_queen_food" && !ant.carrying) {
+        const point = getStoragePilePoint(ant.targetStorageType || getAvailableQueenFoodType() || "seed");
+        if (distance(ant, point) < ant.radius + 18) {
+          const food = takeFoodForQueen(ant.targetStorageType);
+          if (food) {
+            ant.carrying = "queen_food";
+            ant.carryingFood = food;
+            ant.job = "delivering_queen_food";
+          }
+        }
+      }
+      if (ant.role === "storageworker" && ant.roomId === "nest" && ant.carrying === "queen_food" && distance(ant, queen) < queen.radius + 34) {
+        feedQueenStoredFood(ant);
+        saveGame(false);
       }
     }
 
@@ -532,6 +693,47 @@
 
     function getSafeOutdoorRoamPoint(ant) {
       return typeof getTrailRoamPoint === "function" ? getTrailRoamPoint(ant) : getRandomRoomExit(ant.roomId);
+    }
+
+    function chooseForageRoom(ant) {
+      const candidates = ["overworld", "patio", "sandpit", "garden"];
+      const scored = candidates
+        .map(roomId => ({ roomId, count: countAvailableCrumbsInRoom(roomId) }))
+        .filter(item => item.count > 0);
+      if (scored.length === 0) return "overworld";
+      scored.sort((a, b) => b.count - a.count);
+      const spread = Math.min(3, scored.length);
+      const index = Math.abs(((ant.id || 0) + Math.floor(performance.now() / 5000))) % spread;
+      return scored[index].roomId;
+    }
+
+    function countAvailableCrumbsInRoom(roomId) {
+      let total = 0;
+      for (const crumb of crumbs) {
+        if (!crumb.collected && crumb.roomId === roomId) total += 1;
+      }
+      return total;
+    }
+
+    function countAllAvailableCrumbs() {
+      let total = 0;
+      for (const crumb of crumbs) {
+        if (!crumb.collected) total += 1;
+      }
+      return total;
+    }
+
+    function getForageTravelExit(ant) {
+      if (!ant.targetForageRoom || ant.targetForageRoom === ant.roomId) return null;
+      if (ant.roomId === "overworld") {
+        if (ant.targetForageRoom === "patio") return exits.overworldToPatio;
+        if (ant.targetForageRoom === "sandpit") return exits.overworldToSandpit;
+        if (ant.targetForageRoom === "garden") return exits.overworldToGarden;
+      }
+      if (ant.roomId === "patio") return exits.patioToOverworld;
+      if (ant.roomId === "sandpit") return exits.sandpitToOverworld;
+      if (ant.roomId === "garden") return exits.gardenToOverworld;
+      return null;
     }
 
     function getSafeOutdoorPatrolPoint(ant) {
@@ -627,7 +829,7 @@
       spider.targetMode = "soldier";
       spider.targetAntId = soldier.id;
       spider.soldierFocusTimer = 5;
-      if (worker.roomId === player.roomId) objectiveText.textContent = "A worker cried for help. A soldier is intercepting the spider.";
+      if (worker.roomId === player.roomId) objectiveText.textContent = `A worker cried for help. A soldier is intercepting the ${typeof getEnemyLabel === "function" ? getEnemyLabel(spider) : "enemy"}.`;
       return soldier;
     }
 
@@ -648,15 +850,16 @@
       const nodes = getNestNavigationNodes();
       const targetKey = getNestRouteKey(target);
       if (ant.nestRouteKey !== targetKey || !Array.isArray(ant.nestRoute) || ant.nestRoute.length === 0) {
-        const startIndex = findNearestVisibleNestNode(ant, nodes);
+        let startIndex = findNearestVisibleNestNode(ant, nodes);
         let goalIndex = findNearestVisibleNestNode(target, nodes);
+        if (startIndex < 0) startIndex = findNearestNestNode(ant, nodes);
         if (goalIndex < 0) goalIndex = findNearestNestNode(target, nodes);
         if (startIndex < 0 || goalIndex < 0) return target;
         const path = findNestPath(nodes, startIndex, goalIndex);
         if (path.length < 2) return target;
         ant.nestRouteKey = targetKey;
         ant.nestRoute = path;
-        ant.nestRouteIndex = 1;
+        ant.nestRouteIndex = 0;
       }
       const route = ant.nestRoute;
       if (!route || ant.nestRouteIndex >= route.length) return target;
@@ -674,7 +877,7 @@
     }
 
     function getNestNavigationNodes() {
-      const key = `${rooms.nest.width}:${rooms.nest.height}:${midden.x}:${midden.y}`;
+      const key = `${rooms.nest.width}:${rooms.nest.height}:${midden.x}:${midden.y}:${storage.x}:${storage.y}:${nursery.radius}`;
       if (getNestNavigationNodes.cacheKey === key && getNestNavigationNodes.cache) return getNestNavigationNodes.cache;
       const nodes = [];
       for (const chamber of getNestChambers()) nodes.push({ x: chamber.x, y: chamber.y, links: [] });
@@ -689,7 +892,7 @@
       }
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
-          if (!hasNestLineOfSight(nodes[i], nodes[j], 8)) continue;
+          if (!hasNestLineOfSight(nodes[i], nodes[j], getNestNavigationClearance())) continue;
           nodes[i].links.push(j);
           nodes[j].links.push(i);
         }
@@ -711,6 +914,10 @@
         }
       }
       return best;
+    }
+
+    function getNestNavigationClearance() {
+      return 14;
     }
 
     function findNearestNestNode(entity, nodes) {
@@ -874,7 +1081,8 @@
       ant.dead = true;
       colony.ants = Math.max(0, colony.ants - 1);
       if (colony.roles[ant.role] > 0) colony.roles[ant.role] -= 1;
-      if (typeof syncColonyRoleCounts === "function") syncColonyRoleCounts();
+      if (typeof ensureMinimumRolePopulation === "function") ensureMinimumRolePopulation();
+      else if (typeof syncColonyRoleCounts === "function") syncColonyRoleCounts();
       if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
       deadAnts.push(createRecoverableDeadAnt(ant.roomId, ant.x, ant.y, ant.radius, ant.role));
       if (source) source.aggro = false;
@@ -1006,6 +1214,28 @@
         { x: midden.x + 10, y: midden.y + 10 }
       ];
       const index = Math.abs(((ant && ant.id) || 0) + offset) % slots.length;
+      return slots[index];
+    }
+
+    function getStorageWorkPoint(ant) {
+      const slots = [
+        { x: storage.x - 18, y: storage.y + 4 },
+        { x: storage.x + 8, y: storage.y - 10 },
+        { x: storage.x + 18, y: storage.y + 12 }
+      ];
+      const index = Math.abs((ant && ant.id) || 0) % slots.length;
+      return slots[index];
+    }
+
+    function getStorageMealPoint(ant) {
+      const slots = [
+        { x: storage.x - 32, y: storage.y - 18 },
+        { x: storage.x - 12, y: storage.y + 28 },
+        { x: storage.x + 24, y: storage.y + 18 },
+        { x: storage.x + 32, y: storage.y - 16 },
+        { x: storage.x, y: storage.y - 36 }
+      ];
+      const index = Math.abs((ant && ant.id) || 0) % slots.length;
       return slots[index];
     }
 

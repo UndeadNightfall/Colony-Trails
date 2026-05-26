@@ -1,3 +1,11 @@
+    var crumbPalette = [
+      { type: "seed", color: "#e4b55e", highlight: "rgba(255,255,255,0.18)" },
+      { type: "berry", color: "#c95745", highlight: "rgba(255,226,218,0.22)" },
+      { type: "leaf", color: "#76a85a", highlight: "rgba(230,255,210,0.22)" },
+      { type: "petal", color: "#d88cc6", highlight: "rgba(255,232,252,0.24)" },
+      { type: "grain", color: "#f0d78b", highlight: "rgba(255,255,236,0.2)" }
+    ];
+
     function generateMapDecorations() {
       grassClumps.length = 0;
       seasonFlowers.length = 0;
@@ -8,14 +16,22 @@
       }
       for (const roomId of ["overworld", "garden"]) {
         const room = rooms[roomId];
-        for (let i = 0; i < 28; i++) seasonFlowers.push({
-          roomId,
-          x: randomBetween(90, room.width - 90),
-          y: randomBetween(95, room.height - 95),
-          size: randomBetween(0.7, 1.2),
-          hue: roomId === "garden" ? randomBetween(25, 55) : randomBetween(30, 70),
-          sway: randomBetween(0, Math.PI * 2)
-        });
+        const flowerHues = roomId === "garden" ? [12, 36, 54, 154, 204, 282, 326] : [22, 48, 132, 188, 238, 292, 338];
+        const flowerCount = roomId === "garden" ? 58 : 76;
+        for (let i = 0; i < flowerCount; i++) {
+          const hue = flowerHues[Math.floor(randomBetween(0, flowerHues.length))] + randomBetween(-8, 8);
+          seasonFlowers.push({
+            roomId,
+            x: randomBetween(90, room.width - 90),
+            y: randomBetween(95, room.height - 95),
+            size: randomBetween(0.55, 1.08),
+            hue,
+            accentHue: hue + randomBetween(-24, 24),
+            petals: Math.floor(randomBetween(4, 8)),
+            cluster: Math.floor(randomBetween(1, 4)),
+            sway: randomBetween(0, Math.PI * 2)
+          });
+        }
       }
       for (const roomId of ["overworld", "patio", "sandpit", "garden"]) {
         const room = rooms[roomId];
@@ -54,8 +70,10 @@
           x: randomBetween(90, room.width - 90),
           y: randomBetween(95, room.height - 90),
           radius: 16,
+          type: getRandomCrumbType(),
           collected: false
         };
+        applyCrumbColor(crumb);
         if (!isCrumbSpawnClear(crumb)) continue;
         crumbs.push(crumb);
         return true;
@@ -80,6 +98,11 @@
           if (Math.hypot(crumb.x - nearestX, crumb.y - nearestY) < 60) return false;
         }
       }
+      if (crumb.roomId === "garden") {
+        for (const puddle of gardenPuddles) {
+          if (distance(crumb, puddle) < puddle.radius + 52) return false;
+        }
+      }
       return true;
     }
 
@@ -93,11 +116,37 @@
       }
     }
 
+    function getRandomCrumbType() {
+      return crumbPalette[Math.floor(Math.random() * crumbPalette.length)].type;
+    }
+
+    function applyCrumbColor(crumb) {
+      const style = getCrumbStyle(crumb);
+      crumb.color = style.color;
+      crumb.highlight = style.highlight;
+      return crumb;
+    }
+
+    function getCrumbStyle(crumb) {
+      const fallback = crumbPalette[0];
+      if (!crumb) return fallback;
+      if (crumb.color) return { color: crumb.color, highlight: crumb.highlight || fallback.highlight };
+      return crumbPalette.find(item => item.type === crumb.type) || fallback;
+    }
+
+    function getCrumbColor(crumb) {
+      return getCrumbStyle(crumb).color;
+    }
+
+    function getCrumbHighlight(crumb) {
+      return getCrumbStyle(crumb).highlight;
+    }
+
     function spawnSpiders() {
       spiders.length = 0;
       spiders.push({ id: 1, roomId: "overworld", x: 1040, y: 510, homeX: 1040, homeY: 510, radius: 24, angle: 0, speed: 70, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
       spiders.push({ id: 2, roomId: "sandpit", x: 920, y: 420, homeX: 920, homeY: 420, radius: 24, angle: 2, speed: 62, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
-      spiders.push({ id: 3, roomId: "garden", x: 720, y: 650, homeX: 720, homeY: 650, radius: 24, angle: 1, speed: 64, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
+      spiders.push({ id: 3, kind: "frog", canEnterPuddles: true, roomId: "garden", x: 1015, y: 365, homeX: 1015, homeY: 365, radius: 30, angle: 1, speed: 56, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
     }
     function handleRoomTransitions(entity) {
       for (const exit of getRoomExits(entity.roomId)) {
@@ -110,6 +159,7 @@
         entity.roomId = exit.to;
         entity.x = exit.toX;
         entity.y = exit.toY;
+        if (entity !== player && entity.targetForageRoom === entity.roomId) entity.targetForageRoom = null;
         if (entity === player) {
           world.room = rooms[entity.roomId];
           objectiveText.textContent = getRoomObjective(entity.roomId);
@@ -120,7 +170,7 @@
     }
 
     function getRoomObjective(roomId) {
-      if (roomId === "nest") return player.carrying ? "Bring the crumb to the queen." : getNestObjective();
+      if (roomId === "nest") return player.carrying === "food" ? "Drop the crumb in the storage room." : getNestObjective();
       if (roomId === "patio") return "Search the concrete patio. The house beside it is a dry shelter when rain starts.";
       if (roomId === "house") return "The house stays dry. Shelter here when rain starts, then return to the yard when it passes.";
       if (roomId === "sandpit") return "Cross the sandpit carefully. The open sand slows the search and hides crumbs.";
@@ -194,6 +244,62 @@
       ctx.strokeStyle = palette.gardenVein;
       ctx.lineWidth = 8;
       for (let y = 40; y < room.height; y += 42) { ctx.beginPath(); ctx.moveTo(30, y); ctx.lineTo(room.width - 30, y - 18); ctx.stroke(); }
+      drawGardenWaterFeatures();
+    }
+
+    function drawGardenWaterFeatures() {
+      if (player.roomId !== "garden") return;
+      drawGardenSprinkler();
+      for (const puddle of gardenPuddles) drawGardenPuddle(puddle);
+    }
+
+    function drawGardenSprinkler() {
+      const x = 780;
+      const y = 420;
+      const pulse = performance.now() / 520;
+      ctx.save();
+      ctx.strokeStyle = "rgba(146, 202, 219, 0.38)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7, 12]);
+      for (let i = 0; i < 8; i++) {
+        const angle = i * (Math.PI / 4) + Math.sin(pulse) * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * 26, y + Math.sin(angle) * 18);
+        ctx.quadraticCurveTo(x + Math.cos(angle) * 130, y + Math.sin(angle) * 72 - 30, x + Math.cos(angle) * 230, y + Math.sin(angle) * 104);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#4f6b63";
+      ctx.beginPath();
+      ctx.ellipse(x, y, 28, 18, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#2e403d";
+      ctx.fillRect(x - 7, y - 38, 14, 42);
+      ctx.fillStyle = "#78968c";
+      ctx.beginPath();
+      ctx.arc(x, y - 42, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawGardenPuddle(puddle) {
+      ctx.save();
+      ctx.translate(puddle.x, puddle.y);
+      ctx.rotate(puddle.angle || 0);
+      ctx.fillStyle = "rgba(70, 137, 151, 0.62)";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, puddle.rx, puddle.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(155, 219, 229, 0.22)";
+      ctx.beginPath();
+      ctx.ellipse(-puddle.rx * 0.24, -puddle.ry * 0.18, puddle.rx * 0.38, puddle.ry * 0.22, -0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(30, 72, 78, 0.34)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, puddle.rx, puddle.ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
     function drawDecorations() {
       for (const grass of grassClumps) {
@@ -278,23 +384,44 @@
     function drawSpringFlowers() {
       for (const flower of seasonFlowers) {
         if (flower.roomId !== player.roomId) continue;
-        const sway = Math.sin(performance.now() / 900 + flower.sway + flower.x * 0.01) * 1.8;
+        const time = performance.now();
+        const sway = Math.sin(time / 900 + flower.sway + flower.x * 0.01) * 1.8;
         ctx.save();
         ctx.translate(flower.x, flower.y);
-        ctx.rotate(Math.sin(performance.now() / 1100 + flower.sway) * 0.08);
-        ctx.fillStyle = `hsl(${flower.hue} 78% 66%)`;
-        for (let i = 0; i < 5; i++) {
-          const a = (Math.PI * 2 * i) / 5;
+        ctx.rotate(Math.sin(time / 1100 + flower.sway) * 0.08);
+        ctx.strokeStyle = "rgba(66, 106, 44, 0.78)";
+        ctx.lineWidth = Math.max(1, 1.4 * flower.size);
+        const cluster = flower.cluster || 1;
+        for (let bloom = 0; bloom < cluster; bloom++) {
+          const offsetAngle = flower.sway + bloom * 2.35;
+          const offsetX = Math.cos(offsetAngle) * bloom * 7 * flower.size;
+          const offsetY = -Math.sin(offsetAngle * 1.3) * bloom * 3 * flower.size;
           ctx.beginPath();
-          ctx.ellipse(Math.cos(a) * 6, -8 + Math.sin(a) * 2 + sway * 0.1, 4.5 * flower.size, 7.5 * flower.size, a, 0, Math.PI * 2);
+          ctx.moveTo(offsetX * 0.35, 10 * flower.size);
+          ctx.quadraticCurveTo(offsetX * 0.2 + sway * 0.2, 3 * flower.size, offsetX, offsetY - 3 * flower.size);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(offsetX, offsetY - 5 * flower.size);
+          ctx.rotate((bloom - 1) * 0.16 + sway * 0.018);
+          const petals = flower.petals || 5;
+          ctx.fillStyle = `hsl(${bloom % 2 ? flower.accentHue : flower.hue} 82% 66%)`;
+          for (let i = 0; i < petals; i++) {
+            const a = (Math.PI * 2 * i) / petals;
+            ctx.beginPath();
+            ctx.ellipse(Math.cos(a) * 4.8 * flower.size, Math.sin(a) * 4.2 * flower.size, 3.2 * flower.size, 5.4 * flower.size, a, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = "#f7e9a7";
+          ctx.beginPath();
+          ctx.arc(0, 0, 2.1 * flower.size, 0, Math.PI * 2);
           ctx.fill();
+          ctx.restore();
         }
-        ctx.fillStyle = "#f6f0c8";
+        ctx.fillStyle = "rgba(82, 132, 52, 0.72)";
         ctx.beginPath();
-        ctx.arc(0, -2, 2.8 * flower.size, 0, Math.PI * 2);
+        ctx.ellipse(-4 * flower.size, 8 * flower.size, 2.1 * flower.size, 5 * flower.size, -0.8, 0, Math.PI * 2);
+        ctx.ellipse(5 * flower.size, 7 * flower.size, 2.1 * flower.size, 5 * flower.size, 0.8, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#5b7d34";
-        ctx.fillRect(-1, 2, 2, 10 * flower.size);
         ctx.restore();
       }
     }

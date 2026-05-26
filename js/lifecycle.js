@@ -12,7 +12,7 @@
       generateMapDecorations();
       spawnCrumbs();
       spawnSpiders();
-      spawnHelperAnt();
+      spawnStartingColonyAnts();
       resizeCanvas();
       requestAnimationFrame(gameLoop);
     }
@@ -66,12 +66,14 @@
       }
       deadAnts.push(createRecoverableDeadAnt(player.roomId, player.x, player.y, player.radius, "worker"));
       colony.ants = Math.max(0, colony.ants - 1);
+      if (typeof ensureMinimumRolePopulation === "function") ensureMinimumRolePopulation();
       player.roomId = "nest";
       world.room = rooms.nest;
       player.x = queen.x + 115;
       player.y = queen.y;
       player.health = 3;
       player.carrying = false;
+      player.carryingFood = [];
       player.sick = false;
       player.sickTimer = 0;
       player.sickProgress = 0;
@@ -100,5 +102,5 @@
       colonyDisplay.textContent = `Colony: ${colony.ants}`;
       if (typeof updateColonyDropdown === "function") updateColonyDropdown();
       healthDisplay.textContent = player.sick ? `Health: ${player.health} Sick` : `Health: ${player.health}`;
-      actionButton.textContent = player.carrying ? "Carry" : "Find";
+      actionButton.textContent = player.carrying === "food" ? `Food ${getCarriedFoodCount(player)}/${getFoodCarryLimit()}` : player.carrying ? "Carry" : "Find";
     }

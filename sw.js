@@ -1,4 +1,4 @@
-const CACHE_NAME = "colony-trails-v10";
+const CACHE_NAME = "colony-trails-v18";
 const ASSETS = [
   "./",
   "./index.html",

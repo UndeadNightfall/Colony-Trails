@@ -1,32 +1,79 @@
     function drawNestRoomGround() {
       ctx.fillStyle = "#21120b";
       ctx.fillRect(0, 0, rooms.nest.width, rooms.nest.height);
+      drawNestDirtTexture();
       drawNestTunnels();
+    }
+
+    function drawNestDirtTexture() {
+      const room = rooms.nest;
+      ctx.save();
+      for (let i = 0; i < 150; i++) {
+        const seed = i * 97 + 41;
+        const x = 28 + ((seed * 53) % (room.width - 56));
+        const y = 26 + ((seed * 71) % (room.height - 52));
+        const size = 2 + (i % 5);
+        ctx.fillStyle = i % 3 === 0 ? "rgba(95, 65, 45, 0.28)" : "rgba(18, 10, 7, 0.22)";
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (let i = 0; i < 46; i++) {
+        const seed = i * 131 + 19;
+        const x = 36 + ((seed * 47) % (room.width - 72));
+        const y = 34 + ((seed * 83) % (room.height - 68));
+        const rx = 7 + (i % 4) * 2.8;
+        const ry = 4 + (i % 3) * 2.2;
+        const angle = (seed % 11) * 0.28;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.fillStyle = i % 2 === 0 ? "rgba(93, 70, 54, 0.48)" : "rgba(56, 39, 29, 0.52)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(148, 115, 87, 0.16)";
+        ctx.beginPath();
+        ctx.ellipse(-rx * 0.25, -ry * 0.25, rx * 0.35, ry * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
     }
 
     function getNestChambers() {
       return [
         { id: "entrance", label: "Entrance", x: 1120, y: 210, rx: 96, ry: 54, angle: 0.05, fill: "#392112" },
         { id: "junction", label: "", x: 1080, y: 520, rx: 82, ry: 58, angle: -0.08, fill: "#342012" },
-        { id: "nursery", label: "Nursery", x: nursery.x, y: nursery.y, rx: nursery.rx, ry: nursery.ry, angle: -0.12, fill: "#2b190d" },
+        { id: "nursery", label: "Nursery", x: nursery.x, y: nursery.y, rx: nursery.radius, ry: nursery.radius, angle: 0, fill: "#2b190d", gateway: getNestChamberGateway("nursery") },
         { id: "queen", label: "Queen", x: queen.x, y: queen.y, rx: 128, ry: 82, angle: 0.08, fill: "#301b0f" },
-        { id: "storeA", label: "Stores", x: 1390, y: 610, rx: 94, ry: 58, angle: 0.18, fill: "#352113" },
+        { id: "storage", label: "Storage", x: storage.x, y: storage.y, rx: storage.radius, ry: storage.radius, angle: 0, fill: "#352113", gateway: getNestChamberGateway("storage") },
         { id: "restA", label: "", x: 690, y: 470, rx: 100, ry: 56, angle: -0.22, fill: "#342012" },
         { id: "restB", label: "", x: 1480, y: 900, rx: 112, ry: 60, angle: 0.12, fill: "#342012" },
-        { id: "midden", label: "Midden", x: midden.x, y: midden.y, rx: midden.radius, ry: midden.radius * 0.78, angle: 0.1, fill: "#24150d" }
+        { id: "midden", label: "Midden", x: midden.x, y: midden.y, rx: midden.radius, ry: midden.radius, angle: 0, fill: "#24150d", gateway: getNestChamberGateway("midden") }
       ];
     }
 
+    function getNestChamberGateway(id) {
+      if (id === "nursery") return { x: nursery.x + 70, y: nursery.y - 48, radius: 28 };
+      if (id === "storage") return { x: storage.x - 70, y: storage.y - 28, radius: 28 };
+      if (id === "midden") return { x: midden.x - 62, y: midden.y + 18, radius: 27 };
+      return null;
+    }
+
     function getNestTunnelRoutes() {
+      const nurseryGate = getNestChamberGateway("nursery");
+      const storageGate = getNestChamberGateway("storage");
+      const middenGate = getNestChamberGateway("midden");
       return [
         { width: 74, points: [{ x: exits.nestToOverworld.x, y: exits.nestToOverworld.y }, { x: 1120, y: 210 }, { x: 1080, y: 520 }] },
-        { width: 58, points: [{ x: 1080, y: 520 }, { x: 900, y: 620 }, { x: nursery.x, y: nursery.y }] },
+        { width: 58, points: [{ x: 1080, y: 520 }, { x: 900, y: 620 }, nurseryGate, { x: nursery.x, y: nursery.y }] },
         { width: 64, points: [{ x: 1080, y: 520 }, { x: 1030, y: 780 }, { x: queen.x, y: queen.y }] },
-        { width: 54, points: [{ x: 1080, y: 520 }, { x: 1280, y: 570 }, { x: 1390, y: 610 }] },
+        { width: 54, points: [{ x: 1080, y: 520 }, { x: 1280, y: 570 }, storageGate, { x: storage.x, y: storage.y }] },
         { width: 52, points: [{ x: 900, y: 620 }, { x: 760, y: 540 }, { x: 690, y: 470 }] },
         { width: 56, points: [{ x: queen.x, y: queen.y }, { x: 1290, y: 930 }, { x: 1480, y: 900 }] },
-        { width: 56, points: [{ x: 1080, y: 520 }, { x: 1240, y: 420 }, { x: midden.x, y: midden.y }] },
-        { width: 44, points: [{ x: nursery.x, y: nursery.y }, { x: 850, y: 990 }, { x: queen.x - 70, y: queen.y - 20 }] }
+        { width: 56, points: [{ x: 1080, y: 520 }, { x: 1240, y: 420 }, middenGate, { x: midden.x, y: midden.y }] },
+        { width: 44, points: [{ x: nursery.x, y: nursery.y }, nurseryGate, { x: 850, y: 990 }, { x: queen.x - 70, y: queen.y - 20 }] }
       ];
     }
 
@@ -73,8 +120,9 @@
     }
 
     function drawNestRoom() {
-      for (const chamber of getNestChambers()) drawChamber(chamber.x, chamber.y, chamber.rx, chamber.ry, chamber.angle, chamber.fill, chamber.label);
+      for (const chamber of getNestChambers()) drawChamber(chamber);
       drawNurseryContents();
+      drawStorageChamberContents();
       drawMiddenChamberContents();
       drawQueen(queen.x, queen.y, 1.15);
       drawPendingQueenEggs();
@@ -84,7 +132,7 @@
     function drawNurseryContents() {
       ctx.fillStyle = "rgba(255, 235, 176, 0.16)";
       ctx.beginPath();
-      ctx.ellipse(nursery.x, nursery.y, nursery.rx * 0.72, nursery.ry * 0.58, -0.12, 0, Math.PI * 2);
+      ctx.arc(nursery.x, nursery.y, nursery.radius * 0.62, 0, Math.PI * 2);
       ctx.fill();
       if (colony.eggs.length <= 0) return;
       ctx.fillStyle = "#f7dfaa";
@@ -96,6 +144,41 @@
       }
       if (nurseryEggs.length > 0) drawText(`${Math.ceil(nurseryEggs[0].time)}s ${nurseryEggs[0].role}`, nursery.x, nursery.y + nursery.ry + 28);
       drawNurseryFussEffects(nurseryEggs);
+    }
+
+    function drawStorageChamberContents() {
+      const pile = Array.isArray(colony.storagePile) ? colony.storagePile : [];
+      if (typeof normalizeStorageState === "function") normalizeStorageState();
+      ctx.fillStyle = "rgba(202, 151, 76, 0.18)";
+      ctx.beginPath();
+      ctx.arc(storage.x, storage.y, storage.radius * 0.46, 0, Math.PI * 2);
+      ctx.fill();
+      const visibleCount = Math.max(4, Math.min(18, pile.length || 4));
+      for (let i = 0; i < visibleCount; i++) {
+        const stored = pile[i % Math.max(1, pile.length)] || null;
+        const angle = i * 1.7;
+        const radius = 6 + (i % 4) * 7;
+        ctx.fillStyle = stored?.color || "rgba(229, 180, 93, 0.62)";
+        ctx.beginPath();
+        ctx.ellipse(storage.x + Math.cos(angle) * radius, storage.y + Math.sin(angle) * radius, 9, 6, angle * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const type of getStoredPileTypes()) {
+        const sorted = colony.storagePiles[type] || [];
+        if (sorted.length <= 0) continue;
+        const point = getStoragePilePoint(type);
+        for (let i = 0; i < Math.min(7, sorted.length); i++) {
+          const food = sorted[i];
+          const angle = i * 1.4;
+          const radius = 4 + (i % 3) * 5;
+          ctx.fillStyle = food.color || "#e4b55e";
+          ctx.beginPath();
+          ctx.ellipse(point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius, 7, 5, angle * 0.25, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        drawText(`${sorted.length}`, point.x, point.y + 24);
+      }
+      if (pile.length > 0) drawText(`${pile.length}`, storage.x, storage.y + storage.radius + 25);
     }
 
     function drawPendingQueenEggs() {
@@ -212,7 +295,8 @@
       ctx.restore();
     }
 
-    function drawChamber(x, y, rx, ry, angle, fill, label) {
+    function drawChamber(chamber) {
+      const { x, y, rx, ry, angle, fill, label, gateway } = chamber;
       ctx.fillStyle = "rgba(52, 31, 18, 0.98)";
       ctx.beginPath();
       ctx.ellipse(x, y, rx + 8, ry + 8, angle, 0, Math.PI * 2);
@@ -221,7 +305,24 @@
       ctx.beginPath();
       ctx.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2);
       ctx.fill();
+      if (gateway) drawChamberGateway(gateway, fill);
       if (label) drawText(label, x, y - ry - 16);
+    }
+
+    function drawChamberGateway(gateway, fill) {
+      ctx.fillStyle = "rgba(52, 31, 18, 0.98)";
+      ctx.beginPath();
+      ctx.arc(gateway.x, gateway.y, gateway.radius + 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(gateway.x, gateway.y, gateway.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(225, 184, 117, 0.18)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(gateway.x, gateway.y, gateway.radius - 5, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     function moveNestEntity(entity, dx, dy) {
@@ -232,7 +333,15 @@
       }
       const startX = entity.x;
       const startY = entity.y;
+      const targetX = startX + dx;
+      const targetY = startY + dy;
       let blocked = false;
+
+      if (isNestWalkable(targetX, targetY, entity.radius)) {
+        entity.x = targetX;
+        entity.y = targetY;
+        return false;
+      }
 
       if (dx !== 0) {
         entity.x = startX + dx;
@@ -251,7 +360,7 @@
       }
 
       if (!isNestWalkable(entity.x, entity.y, entity.radius)) {
-        const safeSpot = findNearestNestSafeSpot(entity, startX, startY);
+        const safeSpot = findNearestNestSafeSpot(entity, startX, startY, targetX, targetY);
         if (safeSpot) {
           entity.x = safeSpot.x;
           entity.y = safeSpot.y;
@@ -269,12 +378,18 @@
       if (!entity || entity.roomId !== "nest") return null;
       const routePoint = getNearestNestRoutePoint(entity.x, entity.y);
       const safeSpot = findNearestNestSafeSpot(entity, oldX ?? entity.x, oldY ?? entity.y);
-      const prefersRoute = entity.role === "worker" && !entity.carrying && (
+      const prefersRoute = (!entity.carrying || entity.carrying === "food" || entity.carrying === "queen_food") && (
         entity.job === "leaving_nest" ||
         entity.job === "exploring" ||
         entity.job === "roaming" ||
         entity.job === "returning_home" ||
-        entity.job === "retreating"
+        entity.job === "retreating" ||
+        entity.job === "delivering" ||
+        entity.job === "going_to_storage_food" ||
+        entity.job === "storage_patrolling" ||
+        entity.job === "sorting_storage" ||
+        entity.job === "taking_queen_food" ||
+        entity.job === "delivering_queen_food"
       );
       if (prefersRoute && routePoint) {
         entity.x = routePoint.x;
@@ -303,14 +418,17 @@
       return routePoint ? { x: routePoint.x, y: routePoint.y } : null;
     }
 
-    function findNearestNestSafeSpot(entity, oldX, oldY) {
+    function findNearestNestSafeSpot(entity, oldX, oldY, preferredX = oldX, preferredY = oldY) {
       const anchors = [
+        { x: preferredX, y: preferredY },
         { x: oldX, y: oldY },
         { x: entity.x, y: entity.y },
+        getNearestNestRoutePoint(preferredX, preferredY),
+        getNearestNestRoutePoint(entity.x, entity.y),
         ...getNestChambers().map(chamber => ({ x: chamber.x, y: chamber.y })),
         ...getNestTunnelRoutes().flatMap(route => route.points)
-      ];
-      const offsets = [0, 12, 24, 38, 54, 72];
+      ].filter(Boolean);
+      const offsets = [0, 8, 16, 26, 38, 54, 72, 96];
       let best = null;
       let bestScore = Infinity;
       for (const anchor of anchors) {
@@ -319,7 +437,7 @@
             const angle = (Math.PI * 2 * i) / 12;
             const candidate = { x: anchor.x + Math.cos(angle) * radius, y: anchor.y + Math.sin(angle) * radius };
             if (!isNestWalkable(candidate.x, candidate.y, entity.radius)) continue;
-            const score = Math.hypot(candidate.x - oldX, candidate.y - oldY);
+            const score = Math.hypot(candidate.x - preferredX, candidate.y - preferredY) + Math.hypot(candidate.x - oldX, candidate.y - oldY) * 0.25;
             if (score < bestScore) {
               bestScore = score;
               best = candidate;

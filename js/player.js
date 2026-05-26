@@ -76,14 +76,17 @@
         }
       }
 
-      if (isOutdoorRoom(player.roomId) && !player.carrying) {
+      if (isOutdoorRoom(player.roomId) && canCarryMoreFood(player)) {
         for (const crumb of crumbs) {
+          if (!canCarryMoreFood(player)) break;
           if (crumb.roomId === player.roomId && !crumb.collected && distance(player, crumb) < player.radius + crumb.radius + 8) {
             crumb.collected = true;
-            player.carrying = true;
+            const count = addFoodToCarrier(player, crumb);
             playPickupSound();
-            objectiveText.textContent = "Good! Follow the exits back to the nest and bring the crumb to the queen.";
-            break;
+            objectiveText.textContent = count >= getFoodCarryLimit()
+              ? "You are carrying three crumbs. Return to storage."
+              : `You picked up a crumb (${count}/${getFoodCarryLimit()}).`;
+            if (count >= getFoodCarryLimit()) break;
           }
         }
       }
@@ -91,7 +94,7 @@
       if (player.roomId === "nest" && player.carrying === "sick" && distance(player, midden) < midden.radius + 18) depositSickBody();
       if (player.roomId === "nest" && player.carrying === "dead" && distance(player, midden) < midden.radius + 18) depositDeadBody();
       if (player.roomId === "nest" && player.carrying === "egg" && distance(player, nursery) < nursery.rx + 18) depositEggInNursery("player");
-      if (player.roomId === "nest" && player.carrying === true && distance(player, queen) < queen.radius + 30) deliverFood();
+      if (player.roomId === "nest" && player.carrying === "food" && distance(player, storage) < storage.radius + 18) deliverFood();
     }
 
     function normalizeMiddenRecoveryState() {
@@ -142,6 +145,7 @@
       sick.x = midden.x - 12;
       sick.y = midden.y + 12;
       player.carrying = false;
+      player.carryingFood = [];
       objectiveText.textContent = "You carried a sick ant to the midden.";
       saveGame(false);
     }
@@ -185,6 +189,7 @@
       corpse.x = midden.x - 28 + (pileIndex * 13) % 56;
       corpse.y = midden.y - 12 + Math.floor(pileIndex / 5) * 9;
       player.carrying = false;
+      player.carryingFood = [];
       colony.recoveredDead += 1;
       objectiveText.textContent = "You carried a dead ant to the midden.";
       saveGame(false);

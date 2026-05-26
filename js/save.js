@@ -104,12 +104,18 @@
 
     function applySaveData(data) {
       Object.assign(player, data.player);
+      player.carryingFood = normalizeCarryingFood(player);
       normalizeSicknessState(player);
       Object.assign(colony, data.colony);
-      colony.roles = Object.assign({ worker: 0, soldier: 0, nurse: 0, middenworker: 0 }, colony.roles || {});
+      if (typeof normalizeStorageState === "function") normalizeStorageState();
+      colony.roles = Object.assign({ worker: 0, soldier: 0, nurse: 0, middenworker: 0, storageworker: 0 }, colony.roles || {});
       if (typeof colony.roles.midden_worker === "number") {
         colony.roles.middenworker = colony.roles.midden_worker;
         delete colony.roles.midden_worker;
+      }
+      if (typeof colony.roles.storage_worker === "number") {
+        colony.roles.storageworker = colony.roles.storage_worker;
+        delete colony.roles.storage_worker;
       }
       if (typeof data.settings?.musicEnabled === "boolean") setMusicEnabled(data.settings.musicEnabled);
       if (typeof data.settings?.autosaveEnabled === "boolean") {
@@ -131,9 +137,12 @@
       replaceArray(crumbs, data.crumbs || []);
       replaceArray(helpers, data.helpers || []);
       replaceArray(spiders, data.spiders || []);
+      if (typeof normalizeEnemyState === "function") for (const spider of spiders) normalizeEnemyState(spider);
       replaceArray(deadAnts, data.deadAnts || []);
       for (const ant of helpers) normalizeSicknessState(ant);
       for (const ant of helpers) {
+        ant.carryingFood = normalizeCarryingFood(ant);
+        if (typeof normalizeAntHungerState === "function") normalizeAntHungerState(ant);
         if (ant.roomId !== "nest") continue;
         if (typeof ant.nestBlockedCount !== "number") ant.nestBlockedCount = 0;
         if (typeof ant.nestStuckTime !== "number") ant.nestStuckTime = 0;
@@ -148,6 +157,7 @@
       }
       for (const egg of colony.eggs || []) normalizeEggState(egg);
       nextAntId = helpers.reduce((max, ant) => Math.max(max, ant.id || 0), 0) + 1;
+      if (typeof ensureMinimumRolePopulation === "function") ensureMinimumRolePopulation();
       world.room = rooms[player.roomId] || rooms.nest;
       player.roomId = world.room.id;
       if (typeof syncEggFoodRequirement === "function") syncEggFoodRequirement();
@@ -160,6 +170,15 @@
     function replaceArray(target, values) {
       target.length = 0;
       for (const value of values) target.push(value);
+    }
+
+    function normalizeCarryingFood(entity) {
+      if (!entity) return [];
+      if (entity.carrying === "queen_food") return entity.carryingFood || null;
+      if (entity.carrying !== "food") return [];
+      if (Array.isArray(entity.carryingFood)) return entity.carryingFood;
+      if (entity.carryingFood) return [entity.carryingFood];
+      return [];
     }
 
     function normalizeEggState(egg) {

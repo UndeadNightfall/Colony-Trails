@@ -6,8 +6,21 @@
         if (item.type === "circle") resolveCircleAgainstCircle(entity, item);
         else resolveCircleAgainstRect(entity, item);
       }
+      resolveGardenPuddles(entity);
       entity.x = clamp(entity.x, 30, rooms[entity.roomId].width - 30);
       entity.y = clamp(entity.y, 30, rooms[entity.roomId].height - 30);
+    }
+
+    function resolveGardenPuddles(entity) {
+      if (entity.roomId !== "garden" || !shouldPuddleBlockEntity(entity)) return;
+      for (const puddle of gardenPuddles) {
+        resolveCircleAgainstCircle(entity, puddle);
+      }
+    }
+
+    function shouldPuddleBlockEntity(entity) {
+      if (entity?.canEnterPuddles || entity?.kind === "frog") return false;
+      return entity === player || !!entity.role;
     }
     function resolveCircleAgainstCircle(entity, item) {
       const dx = entity.x - item.x;
@@ -115,7 +128,7 @@
     }
 
     function getWorkerTrailForageRadius() {
-      return 360;
+      return 520;
     }
 
     function getNearestSafeTrailPoint(roomId, x, y) {

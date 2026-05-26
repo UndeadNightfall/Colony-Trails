@@ -74,7 +74,7 @@
         if (sameRoomAsPlayer && !playerProtected && distance(spider, player) < spider.radius + player.radius && player.invulnerable <= 0) {
           player.health -= 1;
           player.invulnerable = 1.2;
-          objectiveText.textContent = "Ouch! Avoid the goofy spiders or run back to the nest.";
+          objectiveText.textContent = `Ouch! Avoid the ${getEnemyLabel(spider)} or run back to the nest.`;
           const knockback = Math.atan2(player.y - spider.y, player.x - spider.x);
           player.x += Math.cos(knockback) * 48;
           player.y += Math.sin(knockback) * 48;
@@ -91,7 +91,7 @@
       spider.soldierFocusTimer = 0;
       spider.respawnTimer = randomBetween(28, 46);
       if (defenseCall.targetSpiderId === spider.id) resetDefenseCall();
-      objectiveText.textContent = "Soldiers cleared a spider. The area is safer for now.";
+      objectiveText.textContent = `Soldiers cleared a ${getEnemyLabel(spider)}. The area is safer for now.`;
     }
 
     function respawnSpider(spider) {
@@ -103,6 +103,23 @@
       spider.targetMode = null;
       spider.targetAntId = null;
       spider.soldierFocusTimer = 0;
+    }
+
+    function getEnemyLabel(enemy) {
+      if (enemy?.kind === "frog") return "frog";
+      return "spider";
+    }
+
+    function normalizeEnemyState(enemy) {
+      if (!enemy) return;
+      if (enemy.id === 3 && enemy.roomId === "garden") enemy.kind = "frog";
+      if (enemy.kind === "frog") {
+        enemy.canEnterPuddles = true;
+        enemy.radius = enemy.radius || 30;
+        enemy.speed = enemy.speed || 56;
+        if (typeof enemy.homeX !== "number") enemy.homeX = 1015;
+        if (typeof enemy.homeY !== "number") enemy.homeY = 365;
+      }
     }
 
     function getSpiderSoldierTarget(spider) {
@@ -151,6 +168,10 @@
       for (const spider of spiders) {
         const walk = performance.now() / 155 + spider.x * 0.02 + spider.y * 0.02;
         if (!spider.alive || spider.roomId !== player.roomId) continue;
+        if (spider.kind === "frog") {
+          drawFrog(spider, walk);
+          continue;
+        }
         ctx.save(); ctx.translate(spider.x, spider.y); ctx.rotate(spider.angle + Math.PI);
         ctx.fillStyle = "rgba(0,0,0,0.23)"; ctx.beginPath(); ctx.ellipse(0, 20, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "#2a1a14"; ctx.lineWidth = 4;
@@ -170,4 +191,52 @@
         ctx.fillStyle = "#fff1c4"; ctx.beginPath(); ctx.arc(-27, -6, 3, 0, Math.PI * 2); ctx.arc(-27, 6, 3, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
+    }
+
+    function drawFrog(frog, walk) {
+      const crouch = Math.sin(walk * 0.8) * 2.5;
+      ctx.save();
+      ctx.translate(frog.x, frog.y + crouch);
+      ctx.rotate(frog.angle + Math.PI);
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath();
+      ctx.ellipse(0, 22, 38, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#4f8b45";
+      ctx.beginPath();
+      ctx.ellipse(8, 0, 34, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#69a85c";
+      ctx.beginPath();
+      ctx.ellipse(-22, 0, 24, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#d9f0bf";
+      ctx.beginPath();
+      ctx.ellipse(12, 8, 24, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#2f5f31";
+      for (const y of [-16, 16]) {
+        ctx.beginPath();
+        ctx.ellipse(4, y, 24, 8, y < 0 ? -0.48 : 0.48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(34, y * 0.82, 22, 7, y < 0 ? 0.42 : -0.42, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#f6ffd9";
+      ctx.beginPath();
+      ctx.arc(-34, -8, 5, 0, Math.PI * 2);
+      ctx.arc(-34, 8, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#171c12";
+      ctx.beginPath();
+      ctx.arc(-36, -8, 2.1, 0, Math.PI * 2);
+      ctx.arc(-36, 8, 2.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(32, 74, 36, 0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(-29, 0, 12, -0.65, 0.65);
+      ctx.stroke();
+      ctx.restore();
     }
