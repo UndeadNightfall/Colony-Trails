@@ -147,6 +147,29 @@
       spiders.push({ id: 1, roomId: "overworld", x: 1040, y: 510, homeX: 1040, homeY: 510, radius: 24, angle: 0, speed: 70, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
       spiders.push({ id: 2, roomId: "sandpit", x: 920, y: 420, homeX: 920, homeY: 420, radius: 24, angle: 2, speed: 62, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
       spiders.push({ id: 3, kind: "frog", canEnterPuddles: true, roomId: "garden", x: 1015, y: 365, homeX: 1015, homeY: 365, radius: 30, angle: 1, speed: 56, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 });
+      ensureBeetleSpawns();
+    }
+
+    function getBeetleSpawnSpecs() {
+      return [
+        { id: 4, roomId: "overworld", x: 380, y: 280, angle: 0.8 },
+        { id: 5, roomId: "patio", x: 620, y: 310, angle: 2.4 },
+        { id: 6, roomId: "sandpit", x: 480, y: 550, angle: 4.1 },
+        { id: 7, roomId: "garden", x: 300, y: 580, angle: 5.2 }
+      ];
+    }
+
+    function createBeetleEnemy(spec) {
+      return { id: spec.id, kind: "beetle", roomId: spec.roomId, x: spec.x, y: spec.y, homeX: spec.x, homeY: spec.y, radius: 20, angle: spec.angle, speed: 45, aggro: false, alive: true, respawnTimer: 0, targetMode: null, targetAntId: null, soldierFocusTimer: 0 };
+    }
+
+    function ensureBeetleSpawns() {
+      for (const spec of getBeetleSpawnSpecs()) {
+        if (!spiders.some(enemy => enemy.id === spec.id)) spiders.push(createBeetleEnemy(spec));
+      }
+      if (typeof normalizeEnemyState === "function") {
+        for (const enemy of spiders) normalizeEnemyState(enemy);
+      }
     }
     function handleRoomTransitions(entity) {
       for (const exit of getRoomExits(entity.roomId)) {

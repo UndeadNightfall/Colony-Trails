@@ -111,6 +111,7 @@
 
     function getEnemyLabel(enemy) {
       if (enemy?.kind === "frog") return "frog";
+      if (enemy?.kind === "beetle") return "beetle";
       return "spider";
     }
 
@@ -131,6 +132,10 @@
         if (typeof enemy.jumpStartY !== "number") enemy.jumpStartY = enemy.y;
         if (typeof enemy.jumpTargetX !== "number") enemy.jumpTargetX = enemy.x;
         if (typeof enemy.jumpTargetY !== "number") enemy.jumpTargetY = enemy.y;
+      }
+      if (enemy.kind === "beetle") {
+        enemy.radius = enemy.radius || 20;
+        enemy.speed = enemy.speed || 45;
       }
     }
 
@@ -243,6 +248,10 @@
           drawFrog(spider, walk);
           continue;
         }
+        if (spider.kind === "beetle") {
+          drawBeetle(spider, walk);
+          continue;
+        }
         ctx.save(); ctx.translate(spider.x, spider.y); ctx.rotate(spider.angle + Math.PI);
         ctx.fillStyle = "rgba(0,0,0,0.23)"; ctx.beginPath(); ctx.ellipse(0, 20, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "#2a1a14"; ctx.lineWidth = 4;
@@ -262,6 +271,79 @@
         ctx.fillStyle = "#fff1c4"; ctx.beginPath(); ctx.arc(-27, -6, 3, 0, Math.PI * 2); ctx.arc(-27, 6, 3, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
+    }
+
+    function drawBeetle(beetle, walk) {
+      ctx.save();
+      ctx.translate(beetle.x, beetle.y);
+      ctx.rotate(beetle.angle + Math.PI);
+
+      ctx.fillStyle = "rgba(0,0,0,0.24)";
+      ctx.beginPath();
+      ctx.ellipse(2, 17, 25, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#1b130f";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      for (let i = -1; i <= 1; i++) {
+        const phase = walk + i * 0.85;
+        const reach = Math.sin(phase) * 5;
+        const sideY = 7 + i * 7;
+        ctx.beginPath();
+        ctx.moveTo(-4 + i * 5, -sideY);
+        ctx.lineTo(5 + i * 8 + reach, -sideY - 13);
+        ctx.moveTo(-4 + i * 5, sideY);
+        ctx.lineTo(5 + i * 8 - reach, sideY + 13);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#2b1f17";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-24, -6);
+      ctx.quadraticCurveTo(-38, -16, -47, -13);
+      ctx.moveTo(-24, 6);
+      ctx.quadraticCurveTo(-38, 16, -47, 13);
+      ctx.stroke();
+
+      const shell = ctx.createLinearGradient(-18, -18, 22, 18);
+      shell.addColorStop(0, "#17100d");
+      shell.addColorStop(0.5, "#322119");
+      shell.addColorStop(1, "#0b0908");
+      ctx.fillStyle = shell;
+      ctx.beginPath();
+      ctx.ellipse(4, 0, 27, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(7,5,4,0.72)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(3, -17);
+      ctx.lineTo(3, 17);
+      ctx.stroke();
+
+      ctx.fillStyle = "#211610";
+      ctx.beginPath();
+      ctx.ellipse(-22, 0, 13, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(69,94,80,0.28)";
+      ctx.beginPath();
+      ctx.ellipse(0, -8, 18, 5, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(92,55,123,0.2)";
+      ctx.beginPath();
+      ctx.ellipse(11, 7, 13, 4, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#070605";
+      ctx.beginPath();
+      ctx.arc(-30, -4, 1.8, 0, Math.PI * 2);
+      ctx.arc(-30, 4, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     }
 
     function drawFrog(frog, walk) {

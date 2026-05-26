@@ -138,6 +138,7 @@
       replaceArray(helpers, data.helpers || []);
       replaceArray(spiders, data.spiders || []);
       if (typeof normalizeEnemyState === "function") for (const spider of spiders) normalizeEnemyState(spider);
+      if (typeof ensureBeetleSpawns === "function") ensureBeetleSpawns();
       replaceArray(deadAnts, data.deadAnts || []);
       for (const ant of helpers) normalizeSicknessState(ant);
       for (const ant of helpers) {
