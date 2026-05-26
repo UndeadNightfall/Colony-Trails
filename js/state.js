@@ -65,13 +65,13 @@
       storagePiles: {},
       queenFeedTimer: 30,
       queenHungry: false,
-      ants: 5,
+      ants: 6,
       eggs: [],
       crumbsForEgg: 5,
       incubationDuration: 18,
       nestStage: 4,
       tunnelCapacity: [80],
-      roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 1 },
+      roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 2 },
       recoveredDead: 0,
       excavation: { active: false, targetStage: 4, progress: 0, duration: 0 }
     };
@@ -235,13 +235,13 @@
         storagePiles: {},
         queenFeedTimer: 30,
         queenHungry: false,
-        ants: 5,
+        ants: 6,
         eggs: [],
         crumbsForEgg: 5,
         incubationDuration: 18,
         nestStage: 4,
         tunnelCapacity: [80],
-        roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 1 },
+        roles: { worker: 1, soldier: 1, nurse: 1, middenworker: 1, storageworker: 2 },
         recoveredDead: 0,
         excavation: { active: false, targetStage: 4, progress: 0, duration: 0 }
       });

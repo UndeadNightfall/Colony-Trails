@@ -2,7 +2,7 @@
 
 ## Current task
 
-Game file-size optimization audit completed by Codex. No implementation change active.
+Starting colony now begins with two storage workers. No further implementation task active.
 
 ## Platform recommendation
 
@@ -37,6 +37,12 @@ state.js → collision.js → world.js → colony.js → player.js → ants.js
 `crumbPalette` is declared in world.js and used in colony.js (`normalizeStorageState`) — load order is correct.
 
 ## Known risks
+
+### Fixed this handoff
+
+**Starting storage workers increased to two** (`js/state.js`, `js/colony.js`) — implemented.
+
+New games now start with 6 total colony ants: the player/worker, soldier, nurse, midden worker, and two storage workers. `resetGameState()` mirrors the same starting role counts, and `spawnStartingColonyAnts()` now spawns a second storage worker near the storage chamber.
 
 ### Fixed this handoff
 

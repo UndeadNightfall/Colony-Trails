@@ -274,6 +274,7 @@
       spawnColonyAnt("soldier", nest.x + 18, nest.y - 26);
       spawnColonyAnt("middenworker", midden.x - 18, midden.y + 10);
       spawnColonyAnt("storageworker", storage.x - 18, storage.y + 8);
+      spawnColonyAnt("storageworker", storage.x + 18, storage.y + 8);
       spawnColonyAnt("nurse", nursery.x - 18, nursery.y + 8);
     }
 
