@@ -33,7 +33,9 @@
           spider.targetAntId = null;
         }
         if (dToPlayer > giveUpRange && spider.targetMode !== "soldier") spider.aggro = false;
-        if (spider.aggro && spider.targetMode === "soldier" && soldierTarget) {
+        if (spider.kind === "frog") {
+          updateFrogMovement(spider, delta);
+        } else if (spider.aggro && spider.targetMode === "soldier" && soldierTarget) {
           targetAngle = Math.atan2(soldierTarget.y - spider.y, soldierTarget.x - spider.x);
           spider.angle = targetAngle;
           spider.x += Math.cos(targetAngle) * spider.speed * 1.25 * delta;
@@ -56,13 +58,15 @@
           spider.x += Math.cos(spider.angle) * spider.speed * 0.62 * delta;
           spider.y += Math.sin(spider.angle) * spider.speed * 0.62 * delta;
         }
-        if (preventSpiderTrailCrossing(spider, oldX, oldY)) {
+        if (spider.kind !== "frog" && preventSpiderTrailCrossing(spider, oldX, oldY)) {
           spider.x = oldX;
           spider.y = oldY;
           spider.angle += Math.PI * 0.85;
         }
-        if (typeof keepSpiderOffSafeTrails === "function") keepSpiderOffSafeTrails(spider);
-        resolveOverworldObstructions(spider);
+        if (spider.kind !== "frog") {
+          if (typeof keepSpiderOffSafeTrails === "function") keepSpiderOffSafeTrails(spider);
+          resolveOverworldObstructions(spider);
+        }
         const targetSoldier = soldierTarget || getSpiderSoldierTarget(spider);
         if (targetSoldier && distance(spider, targetSoldier) < spider.radius + targetSoldier.radius) {
           spider.aggro = true;
@@ -119,7 +123,74 @@
         enemy.speed = enemy.speed || 56;
         if (typeof enemy.homeX !== "number") enemy.homeX = 1015;
         if (typeof enemy.homeY !== "number") enemy.homeY = 365;
+        if (!["idle", "crouching", "leaping", "landing"].includes(enemy.jumpState)) enemy.jumpState = "idle";
+        if (typeof enemy.jumpTimer !== "number") enemy.jumpTimer = randomBetween(1.8, 3.2);
+        if (typeof enemy.jumpElapsed !== "number") enemy.jumpElapsed = 0;
+        if (typeof enemy.jumpDuration !== "number") enemy.jumpDuration = 0.3;
+        if (typeof enemy.jumpStartX !== "number") enemy.jumpStartX = enemy.x;
+        if (typeof enemy.jumpStartY !== "number") enemy.jumpStartY = enemy.y;
+        if (typeof enemy.jumpTargetX !== "number") enemy.jumpTargetX = enemy.x;
+        if (typeof enemy.jumpTargetY !== "number") enemy.jumpTargetY = enemy.y;
       }
+    }
+
+    function updateFrogMovement(frog, delta) {
+      normalizeEnemyState(frog);
+      if (frog.roomId !== "garden") return;
+      if (frog.jumpState === "idle") {
+        frog.jumpTimer -= delta;
+        if (frog.jumpTimer <= 0) {
+          frog.jumpState = "crouching";
+          frog.jumpTimer = 0.25;
+        }
+        return;
+      }
+      if (frog.jumpState === "crouching") {
+        frog.jumpTimer -= delta;
+        if (frog.jumpTimer <= 0) {
+          startFrogLeap(frog);
+        }
+        return;
+      }
+      if (frog.jumpState === "leaping") {
+        frog.jumpElapsed = Math.min(frog.jumpDuration, frog.jumpElapsed + delta);
+        const t = frog.jumpDuration > 0 ? frog.jumpElapsed / frog.jumpDuration : 1;
+        frog.x = frog.jumpStartX + (frog.jumpTargetX - frog.jumpStartX) * t;
+        frog.y = frog.jumpStartY + (frog.jumpTargetY - frog.jumpStartY) * t;
+        if (t >= 1) {
+          frog.x = frog.jumpTargetX;
+          frog.y = frog.jumpTargetY;
+          frog.jumpState = "landing";
+          frog.jumpTimer = 0.5;
+        }
+        return;
+      }
+      if (frog.jumpState === "landing") {
+        frog.jumpTimer -= delta;
+        if (frog.jumpTimer <= 0) {
+          frog.jumpState = "idle";
+          frog.jumpTimer = randomBetween(1.8, 3.2);
+          frog.jumpStartX = frog.x;
+          frog.jumpStartY = frog.y;
+          frog.jumpTargetX = frog.x;
+          frog.jumpTargetY = frog.y;
+        }
+      }
+    }
+
+    function startFrogLeap(frog) {
+      const jumpAngle = randomBetween(0, Math.PI * 2);
+      const jumpDistance = randomBetween(60, 150);
+      const margin = 30;
+      frog.jumpStartX = frog.x;
+      frog.jumpStartY = frog.y;
+      frog.jumpTargetX = clamp(frog.x + Math.cos(jumpAngle) * jumpDistance, margin, rooms.garden.width - margin);
+      frog.jumpTargetY = clamp(frog.y + Math.sin(jumpAngle) * jumpDistance, margin, rooms.garden.height - margin);
+      frog.jumpElapsed = 0;
+      frog.jumpDuration = 0.3;
+      frog.jumpTimer = 0.3;
+      frog.jumpState = "leaping";
+      frog.angle = Math.atan2(frog.jumpTargetY - frog.jumpStartY, frog.jumpTargetX - frog.jumpStartX);
     }
 
     function getSpiderSoldierTarget(spider) {
@@ -194,49 +265,78 @@
     }
 
     function drawFrog(frog, walk) {
-      const crouch = Math.sin(walk * 0.8) * 2.5;
+      const leaping = frog.jumpState === "leaping";
+      const crouching = frog.jumpState === "crouching";
+      const landing = frog.jumpState === "landing";
+      const leapT = leaping && frog.jumpDuration > 0 ? frog.jumpElapsed / frog.jumpDuration : 0;
+      const lift = leaping ? Math.sin(leapT * Math.PI) * 9 : 0;
+      const squash = crouching ? 1 : landing ? 0.55 : 0;
+      const legSpread = crouching ? 0.65 : leaping ? 1.22 : 1;
       ctx.save();
-      ctx.translate(frog.x, frog.y + crouch);
+      ctx.translate(frog.x, frog.y - lift + squash * 2);
       ctx.rotate(frog.angle + Math.PI);
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.beginPath();
-      ctx.ellipse(0, 22, 38, 13, 0, 0, Math.PI * 2);
+      ctx.ellipse(4, 24 + lift * 0.45, 36, 11, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#4f8b45";
-      ctx.beginPath();
-      ctx.ellipse(8, 0, 34, 25, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#69a85c";
-      ctx.beginPath();
-      ctx.ellipse(-22, 0, 24, 20, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#d9f0bf";
-      ctx.beginPath();
-      ctx.ellipse(12, 8, 24, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#2f5f31";
-      for (const y of [-16, 16]) {
+
+      ctx.fillStyle = "#315f2f";
+      for (const side of [-1, 1]) {
         ctx.beginPath();
-        ctx.ellipse(4, y, 24, 8, y < 0 ? -0.48 : 0.48, 0, Math.PI * 2);
+        ctx.ellipse(13, side * 24 * legSpread, 18, 8, side * 0.52, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(34, y * 0.82, 22, 7, y < 0 ? 0.42 : -0.42, 0, Math.PI * 2);
+        ctx.ellipse(31, side * 28 * legSpread, 16, 6, side * -0.18, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = "#f6ffd9";
+
+      ctx.fillStyle = "#4f8c45";
       ctx.beginPath();
-      ctx.arc(-34, -8, 5, 0, Math.PI * 2);
-      ctx.arc(-34, 8, 5, 0, Math.PI * 2);
+      ctx.ellipse(8, 0, 31, 23 - squash * 3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#171c12";
+
+      ctx.fillStyle = "#6ea660";
       ctx.beginPath();
-      ctx.arc(-36, -8, 2.1, 0, Math.PI * 2);
-      ctx.arc(-36, 8, 2.1, 0, Math.PI * 2);
+      ctx.ellipse(-20, 0, 26, 18 - squash * 2, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(32, 74, 36, 0.7)";
-      ctx.lineWidth = 2;
+
+      ctx.fillStyle = "#d8e8b7";
       ctx.beginPath();
-      ctx.arc(-29, 0, 12, -0.65, 0.65);
+      ctx.ellipse(5, 8, 22, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#355f2f";
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(-6, side * 17, 14, 5.5, side * -0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "#e9f4cf";
+      ctx.beginPath();
+      ctx.arc(-35, -10, 7, 0, Math.PI * 2);
+      ctx.arc(-35, 10, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1b2114";
+      ctx.beginPath();
+      ctx.arc(-37, -10, 3.1, 0, Math.PI * 2);
+      ctx.arc(-37, 10, 3.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(36, 74, 35, 0.72)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(-29, 0, 11, -0.55, 0.55);
       ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,230,0.26)";
+      ctx.beginPath();
+      ctx.ellipse(-5, -8, 18, 5, -0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.42)";
+      ctx.beginPath();
+      ctx.arc(-39, -12, 1.5, 0, Math.PI * 2);
+      ctx.arc(-39, 8, 1.5, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
