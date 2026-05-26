@@ -2,7 +2,7 @@
 
 ## Current task
 
-Enemy corpse dedicated storage pile implemented by Codex. No further implementation task active.
+Game file-size optimization audit completed by Codex. No implementation change active.
 
 ## Platform recommendation
 
@@ -37,6 +37,19 @@ state.js → collision.js → world.js → colony.js → player.js → ants.js
 `crumbPalette` is declared in world.js and used in colony.js (`normalizeStorageState`) — load order is correct.
 
 ## Known risks
+
+### Fixed this handoff
+
+**File-size optimization audit** — completed, no gameplay files changed.
+
+Findings:
+- No tracked junk/backup/temp files were found outside `.git`.
+- All tracked PNGs, MP3s, and JS files are referenced by `index.html`, `manifest.webmanifest`, `sw.js`, or runtime JS.
+- Biggest assets are `morning meadow.mp3` (~3.46MB), `title_screen.png` (~2.77MB), `app_icon.png` (~743KB), and the room/gateway PNGs (~278-432KB each).
+- Windows built-in PNG re-save was tested on copies. It saved only 13 bytes on most PNGs and made `title_screen.png` larger, so it was not applied.
+
+Recommended next action:
+- Use dedicated asset tools (`ffmpeg` for MP3 bitrate reduction; `oxipng`/`pngquant` or WebP conversion for images) or ask Claude to review a broader PWA asset/cache strategy before changing shipped asset formats.
 
 ### Fixed this handoff
 
