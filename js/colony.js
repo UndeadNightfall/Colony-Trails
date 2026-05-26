@@ -71,6 +71,19 @@
       carrier.carryingFood = [];
     }
 
+    function depositEnemyCorpseToStorage(ant) {
+      normalizeStorageState();
+      for (let i = 0; i < 5; i++) {
+        colony.storagePiles["corpse"].push({
+          type: "corpse",
+          color: "#3d2a1e",
+          highlight: "rgba(80,50,30,0.25)"
+        });
+      }
+      ant.carrying = false;
+      ant.carryingFood = [];
+    }
+
     function createStoredFoodFromCrumb(crumb) {
       const style = typeof getCrumbStyle === "function" ? getCrumbStyle(crumb) : { color: "#e4b55e", highlight: "rgba(255,255,255,0.18)" };
       return {
@@ -119,13 +132,14 @@
       for (const item of crumbPalette || []) {
         if (!Array.isArray(colony.storagePiles[item.type])) colony.storagePiles[item.type] = [];
       }
+      if (!Array.isArray(colony.storagePiles["corpse"])) colony.storagePiles["corpse"] = [];
       if (typeof colony.queenFeedTimer !== "number") colony.queenFeedTimer = 30;
       if (typeof colony.queenHungry !== "boolean") colony.queenHungry = false;
     }
 
     function getStoredPileTypes() {
       normalizeStorageState();
-      return (crumbPalette || []).map(item => item.type);
+      return [...(crumbPalette || []).map(item => item.type), "corpse"];
     }
 
     function getStorageCentralPoint() {
@@ -133,9 +147,10 @@
     }
 
     function getStoragePilePoint(type) {
-      const types = getStoredPileTypes();
-      const index = Math.max(0, types.indexOf(type));
-      const angle = -Math.PI * 0.78 + index * (Math.PI * 1.56 / Math.max(1, types.length - 1));
+      if (type === "corpse") return { x: storage.x, y: storage.y + storage.radius * 0.54 };
+      const foodTypes = (crumbPalette || []).map(item => item.type);
+      const index = Math.max(0, foodTypes.indexOf(type));
+      const angle = -Math.PI * 0.78 + index * (Math.PI * 1.56 / Math.max(1, foodTypes.length - 1));
       return {
         x: storage.x + Math.cos(angle) * storage.radius * 0.56,
         y: storage.y + Math.sin(angle) * storage.radius * 0.42
@@ -161,9 +176,11 @@
 
     function takeFoodForAntMeal() {
       normalizeStorageState();
-      const type = getAvailableQueenFoodType();
-      if (type) return colony.storagePiles[type].pop();
       if (colony.storagePile.length > 0) return colony.storagePile.shift();
+      if (!colony.queenHungry) {
+        const type = getAvailableQueenFoodType();
+        if (type) return colony.storagePiles[type].pop();
+      }
       return null;
     }
 
@@ -282,7 +299,7 @@
       const x = typeof spawnX === "number" ? spawnX : queen.x + randomBetween(-40, 40);
       const y = typeof spawnY === "number" ? spawnY : queen.y + randomBetween(-35, 35);
       const id = nextAntId++;
-      helpers.push({ id, role, health: 3, x, y, angle, targetAngle: angle, timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, carryingFood: [], targetCrumb: null, targetCorpse: null, targetSickAnt: null, job: getInitialAntJob(role), hungerTimer: randomBetween(20, 95) + (id * 17) % 37, eatTimer: 0, returnJobAfterMeal: null, restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false, restTunnelIndex: null, restSlotIndex: null, sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCarrierId: null, sickCaretakerId: null, sickSourceId: null });
+      helpers.push({ id, role, health: 3, x, y, angle, targetAngle: angle, timer: randomBetween(0.4, 1.6), radius: stats.radius, speed: randomBetween(stats.speedMin, stats.speedMax), roomId: "nest", carrying: false, carryingFood: [], targetCrumb: null, targetCorpse: null, targetEnemyCorpse: null, targetSickAnt: null, job: getInitialAntJob(role), hungerTimer: randomBetween(20, 95) + (id * 17) % 37, eatTimer: 0, returnJobAfterMeal: null, restTimer: randomBetween(14, 28), restDuration: 0, restTarget: null, needsRest: false, restTunnelIndex: null, restSlotIndex: null, sick: false, sickTimer: 0, sickProgress: 0, sickExposure: 0, atMidden: false, carriedBy: null, sickCarrierId: null, sickCaretakerId: null, sickSourceId: null });
     }
 
     function getInitialAntJob(role) {

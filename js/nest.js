@@ -171,10 +171,20 @@
           const food = sorted[i];
           const angle = i * 1.4;
           const radius = 4 + (i % 3) * 5;
-          ctx.fillStyle = food.color || "#e4b55e";
-          ctx.beginPath();
-          ctx.ellipse(point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius, 7, 5, angle * 0.25, 0, Math.PI * 2);
-          ctx.fill();
+          if (type === "corpse") {
+            ctx.fillStyle = "#3d2a1e";
+            ctx.beginPath();
+            ctx.ellipse(point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius, 8, 4, angle * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(90,55,35,0.55)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = food.color || "#e4b55e";
+            ctx.beginPath();
+            ctx.ellipse(point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius, 7, 5, angle * 0.25, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         drawText(`${sorted.length}`, point.x, point.y + 24);
       }
@@ -378,13 +388,14 @@
       if (!entity || entity.roomId !== "nest") return null;
       const routePoint = getNearestNestRoutePoint(entity.x, entity.y);
       const safeSpot = findNearestNestSafeSpot(entity, oldX ?? entity.x, oldY ?? entity.y);
-      const prefersRoute = (!entity.carrying || entity.carrying === "food" || entity.carrying === "queen_food") && (
+      const prefersRoute = (!entity.carrying || entity.carrying === "food" || entity.carrying === "queen_food" || entity.carrying === "enemy_corpse") && (
         entity.job === "leaving_nest" ||
         entity.job === "exploring" ||
         entity.job === "roaming" ||
         entity.job === "returning_home" ||
         entity.job === "retreating" ||
         entity.job === "delivering" ||
+        entity.job === "recovering_enemy_corpse" ||
         entity.job === "going_to_storage_food" ||
         entity.job === "storage_patrolling" ||
         entity.job === "sorting_storage" ||

@@ -22,6 +22,7 @@
       syncPlayerCarriedEgg();
       syncPlayerCarriedSickAnt();
       syncPlayerCarriedDeadAnt();
+      syncPlayerCarriedEnemyCorpse();
       updatePlayerMiddenState(delta);
 
       if (player.sick) {
@@ -76,6 +77,17 @@
         }
       }
 
+      if (!player.carrying) {
+        const enemyCorpse = findNearestRecoverableDeadEnemy(player, 90);
+        if (enemyCorpse && distance(player, enemyCorpse) < player.radius + enemyCorpse.radius + 10) {
+          enemyCorpse.corpseCarrierId = "player";
+          player.carrying = "enemy_corpse";
+          player.carryingFood = { kind: enemyCorpse.kind || "spider" };
+          playPickupSound();
+          objectiveText.textContent = "You picked up an enemy corpse. Carry it to storage.";
+        }
+      }
+
       if (isOutdoorRoom(player.roomId) && canCarryMoreFood(player)) {
         for (const crumb of crumbs) {
           if (!canCarryMoreFood(player)) break;
@@ -95,6 +107,7 @@
       if (player.roomId === "nest" && player.carrying === "dead" && distance(player, midden) < midden.radius + 18) depositDeadBody();
       if (player.roomId === "nest" && player.carrying === "egg" && distance(player, nursery) < nursery.rx + 18) depositEggInNursery("player");
       if (player.roomId === "nest" && player.carrying === "food" && distance(player, storage) < storage.radius + 18) deliverFood();
+      if (player.roomId === "nest" && player.carrying === "enemy_corpse" && distance(player, storage) < storage.radius + 18) depositEnemyCorpse();
     }
 
     function normalizeMiddenRecoveryState() {
@@ -176,6 +189,15 @@
       corpse.y = player.y - Math.sin(player.angle) * 20;
     }
 
+    function syncPlayerCarriedEnemyCorpse() {
+      if (player.carrying !== "enemy_corpse") return;
+      const corpse = spiders.find(item => item.corpse && item.corpseCarrierId === "player");
+      if (!corpse) return;
+      corpse.roomId = player.roomId;
+      corpse.x = player.x - Math.cos(player.angle) * 20;
+      corpse.y = player.y - Math.sin(player.angle) * 20;
+    }
+
     function depositDeadBody() {
       const corpse = deadAnts.find(item => item.carried && item.carriedBy === "player" && !item.atMidden);
       if (!corpse) return;
@@ -192,6 +214,15 @@
       player.carryingFood = [];
       colony.recoveredDead += 1;
       objectiveText.textContent = "You carried a dead ant to the midden.";
+      saveGame(false);
+    }
+
+    function depositEnemyCorpse() {
+      const corpse = spiders.find(item => item.corpse && item.corpseCarrierId === "player");
+      if (!corpse) return;
+      startEnemyRespawn(corpse);
+      depositEnemyCorpseToStorage(player);
+      objectiveText.textContent = "You stored an enemy corpse as food.";
       saveGame(false);
     }
 

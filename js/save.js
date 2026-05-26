@@ -24,6 +24,7 @@
           targetCrumb: null,
           targetSpider: null,
           targetCorpse: null,
+          targetEnemyCorpse: null,
           restTarget: ant.restTarget ? { ...ant.restTarget } : null
         })),
         spiders: spiders.map(spider => ({ ...spider })),
@@ -105,6 +106,10 @@
     function applySaveData(data) {
       Object.assign(player, data.player);
       player.carryingFood = normalizeCarryingFood(player);
+      if (player.carrying === "enemy_corpse") {
+        player.carrying = false;
+        player.carryingFood = [];
+      }
       normalizeSicknessState(player);
       Object.assign(colony, data.colony);
       if (typeof normalizeStorageState === "function") normalizeStorageState();
@@ -137,12 +142,22 @@
       replaceArray(crumbs, data.crumbs || []);
       replaceArray(helpers, data.helpers || []);
       replaceArray(spiders, data.spiders || []);
-      if (typeof normalizeEnemyState === "function") for (const spider of spiders) normalizeEnemyState(spider);
+      if (typeof normalizeEnemyState === "function") {
+        for (const spider of spiders) {
+          normalizeEnemyState(spider);
+          if (spider.corpse) spider.corpseCarrierId = null;
+        }
+      }
       if (typeof ensureBeetleSpawns === "function") ensureBeetleSpawns();
       replaceArray(deadAnts, data.deadAnts || []);
       for (const ant of helpers) normalizeSicknessState(ant);
       for (const ant of helpers) {
         ant.carryingFood = normalizeCarryingFood(ant);
+        if (ant.carrying === "enemy_corpse") {
+          ant.carrying = false;
+          ant.carryingFood = [];
+          ant.targetEnemyCorpse = null;
+        }
         if (typeof normalizeAntHungerState === "function") normalizeAntHungerState(ant);
         if (ant.roomId !== "nest") continue;
         if (typeof ant.nestBlockedCount !== "number") ant.nestBlockedCount = 0;

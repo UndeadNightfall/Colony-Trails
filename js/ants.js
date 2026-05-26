@@ -232,6 +232,7 @@
         ant.job === "delivering_sick" ||
         ant.job === "delivering_egg" ||
         ant.job === "delivering_queen_food" ||
+        ant.job === "recovering_enemy_corpse" ||
         ant.job === "going_to_storage_food" ||
         ant.job === "sorting_storage" ||
         ant.job === "taking_queen_food" ||
@@ -324,7 +325,7 @@
 
     function canTrackAntMealNeed(ant) {
       if (ant.carrying || ant.needsRest || ant.sick || ant.atMidden) return false;
-      if (ant.job === "attacking_spider" || ant.job === "recovering_sick" || ant.job === "recovering_dead" || ant.job === "recovering_egg") return false;
+      if (ant.job === "attacking_spider" || ant.job === "recovering_sick" || ant.job === "recovering_dead" || ant.job === "recovering_enemy_corpse" || ant.job === "recovering_egg") return false;
       if (ant.job === "delivering_dead" || ant.job === "delivering_sick" || ant.job === "delivering_egg" || ant.job === "delivering_queen_food") return false;
       if (ant.role === "storageworker" && (colony.queenHungry || Array.isArray(colony.storagePile) && colony.storagePile.length > 0)) return false;
       return true;
@@ -453,7 +454,12 @@
       if (ant.carrying === "dead") { ant.job = ant.roomId === "nest" ? "delivering_dead" : "returning_home"; return; }
       if (ant.carrying === "sick") { ant.job = ant.roomId === "nest" ? "delivering_sick" : "returning_home"; return; }
       if (ant.carrying === "egg") { ant.job = ant.roomId === "nest" ? "delivering_egg" : "returning_home"; return; }
+      if (ant.carrying === "enemy_corpse") { ant.job = "recovering_enemy_corpse"; return; }
       if (ant.carrying && ant.carrying !== "food") { ant.job = ant.roomId === "nest" ? "delivering" : "returning_home"; return; }
+      if (ant.role === "worker" && !ant.carrying && ant.roomId === "nest") {
+        const enemyCorpse = findNearestRecoverableDeadEnemy(ant, 800);
+        if (enemyCorpse && enemyCorpse.corpse && enemyCorpse.corpseCarrierId == null) { ant.targetEnemyCorpse = enemyCorpse; ant.job = "recovering_enemy_corpse"; return; }
+      }
       if (ant.role === "middenworker" && playerNeedsMiddenCare) {
         const playerMiddenCaretaker = getPlayerMiddenCaretaker() || claimPlayerMiddenWorker();
         if (playerMiddenCaretaker) {
@@ -465,6 +471,7 @@
       if ((ant.role === "worker" || ant.role === "soldier") && ant.roomId === "nest") {
         ant.targetCrumb = null;
         ant.targetCorpse = null;
+        ant.targetEnemyCorpse = null;
         ant.targetSickAnt = null;
         if (ant.role === "worker" && (!ant.targetForageRoom || Math.random() < 0.18)) ant.targetForageRoom = chooseForageRoom(ant);
         ant.job = weather.active ? "roaming" : "leaving_nest";
@@ -483,6 +490,9 @@
         const corpseRange = weather.cleanupPriority ? 1400 : 360;
         const corpse = !ant.carrying ? findNearestRecoverableDeadAnt(ant, corpseRange) : null;
         if (corpse) { ant.targetCorpse = corpse; ant.job = "recovering_dead"; return; }
+        const enemyCorpse = !ant.carrying ? findNearestRecoverableDeadEnemy(ant, 800) : null;
+        if (enemyCorpse) { ant.targetEnemyCorpse = enemyCorpse; ant.job = "recovering_enemy_corpse"; return; }
+        ant.targetEnemyCorpse = null;
         const crumbRange = isOutdoorRoom(ant.roomId) ? 1800 : 520;
         const target = isOutdoorRoom(ant.roomId) ? findNearestTrailReachableCrumb(ant, crumbRange) : findNearestAvailableCrumb(ant, crumbRange);
         if (target) {
@@ -550,6 +560,19 @@
       else if (ant.job === "retreating") pointAlongOutdoorTrail(ant, getWorkerRetreatPoint(ant));
       else if (ant.job === "recovering_sick" && ant.targetSickAnt && !ant.targetSickAnt.atMidden) pointAlongNestRoute(ant, ant.targetSickAnt);
       else if (ant.job === "recovering_dead" && ant.targetCorpse && !ant.targetCorpse.carried) pointAlongNestRoute(ant, ant.targetCorpse);
+      else if (ant.job === "recovering_enemy_corpse") {
+        if (ant.roomId === "nest" && ant.carrying === "enemy_corpse") pointAlongNestRoute(ant, storage);
+        else if (ant.roomId === "nest" && ant.targetEnemyCorpse && ant.targetEnemyCorpse.corpse && ant.targetEnemyCorpse.roomId === "nest") pointAlongNestRoute(ant, ant.targetEnemyCorpse);
+        else if (ant.carrying === "enemy_corpse") {
+          const exit = getHomewardExit(ant.roomId);
+          if (exit) pointAlongOutdoorTrail(ant, exit);
+        } else if (ant.targetEnemyCorpse && ant.targetEnemyCorpse.corpse && ant.targetEnemyCorpse.roomId === ant.roomId) {
+          ant.targetAngle = Math.atan2(ant.targetEnemyCorpse.y - ant.y, ant.targetEnemyCorpse.x - ant.x);
+        } else {
+          ant.targetEnemyCorpse = null;
+          ant.job = ant.roomId === "nest" ? (ant.role === "worker" ? "leaving_nest" : getMealReturnJob(ant)) : "returning_home";
+        }
+      }
       else if (ant.job === "foraging" && ant.targetCrumb && !ant.targetCrumb.collected) ant.targetAngle = Math.atan2(ant.targetCrumb.y - ant.y, ant.targetCrumb.x - ant.x);
       else if (ant.job === "recovering_egg" && ant.targetEgg && !ant.targetEgg.carriedBy) pointAlongNestRoute(ant, ant.targetEgg);
       else if (ant.job === "exploring" && isOutdoorRoom(ant.roomId)) {
@@ -581,6 +604,13 @@
         ant.targetCorpse.carriedBy = ant.id;
         ant.carrying = "dead";
         pointTowardExit(ant, getHomewardExit(ant.roomId));
+      }
+      if (ant.role === "worker" && !ant.carrying && ant.targetEnemyCorpse && ant.targetEnemyCorpse.corpse && ant.targetEnemyCorpse.corpseCarrierId == null && ant.targetEnemyCorpse.roomId === ant.roomId && distance(ant, ant.targetEnemyCorpse) < ant.radius + ant.targetEnemyCorpse.radius + 10) {
+        ant.targetEnemyCorpse.corpseCarrierId = ant.id;
+        ant.carrying = "enemy_corpse";
+        ant.carryingFood = { kind: ant.targetEnemyCorpse.kind || "spider" };
+        if (ant.roomId === "nest") pointAlongNestRoute(ant, storage);
+        else pointTowardExit(ant, getHomewardExit(ant.roomId));
       }
       if (isOutdoorRoom(ant.roomId) && canCarryMoreFood(ant) && ant.targetCrumb && ant.targetCrumb.roomId === ant.roomId && !ant.targetCrumb.collected && distance(ant, ant.targetCrumb) < ant.radius + ant.targetCrumb.radius + 6) {
         addFoodToCarrier(ant, ant.targetCrumb);
@@ -637,6 +667,14 @@
         depositFoodToStorage(ant);
         objectiveText.textContent = "A worker dropped food in the storage room.";
         scheduleCrumbRespawnIfNeeded();
+        saveGame(false);
+      }
+      if (ant.roomId === "nest" && ant.carrying === "enemy_corpse" && distance(ant, storage) < storage.radius + 18) {
+        const corpse = ant.targetEnemyCorpse || spiders.find(enemy => enemy.corpse && enemy.corpseCarrierId === ant.id);
+        if (corpse) startEnemyRespawn(corpse);
+        depositEnemyCorpseToStorage(ant);
+        ant.targetEnemyCorpse = null;
+        objectiveText.textContent = "A worker stored an enemy corpse as food.";
         saveGame(false);
       }
       if (ant.roomId === "nest" && ant.job === "going_to_storage_food" && distance(ant, getStorageMealPoint(ant)) < ant.radius + 16) {
@@ -1078,6 +1116,16 @@
         sick.sickCaretakerId = null;
         ant.targetSickAnt = null;
       }
+      if (ant.carrying === "enemy_corpse") {
+        const corpse = ant.targetEnemyCorpse || spiders.find(enemy => enemy.corpse && enemy.corpseCarrierId === ant.id);
+        if (corpse) {
+          corpse.corpseCarrierId = null;
+          corpse.roomId = ant.roomId;
+          corpse.x = ant.x;
+          corpse.y = ant.y;
+        }
+        ant.targetEnemyCorpse = null;
+      }
       ant.dead = true;
       colony.ants = Math.max(0, colony.ants - 1);
       if (colony.roles[ant.role] > 0) colony.roles[ant.role] -= 1;
@@ -1127,6 +1175,17 @@
         }
         const d = distance(entity, corpse);
         if (d < nearestDistance) { nearest = corpse; nearestDistance = d; }
+      }
+      return nearest;
+    }
+
+    function findNearestRecoverableDeadEnemy(entity, range) {
+      let nearest = null;
+      let nearestDistance = range;
+      for (const enemy of spiders) {
+        if (!enemy.corpse || enemy.corpseCarrierId != null || enemy.roomId !== entity.roomId) continue;
+        const d = distance(entity, enemy);
+        if (d < nearestDistance) { nearest = enemy; nearestDistance = d; }
       }
       return nearest;
     }

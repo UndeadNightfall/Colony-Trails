@@ -496,6 +496,28 @@
       else if (carrying === "egg") { ctx.fillStyle = "#f7dfaa"; ctx.beginPath(); ctx.ellipse(-size * 1.8, 0, size * 0.5, size * 0.72, 0, 0, Math.PI * 2); ctx.fill(); }
       else if (carrying === "food") drawCarriedFoodStack(size, carryingFood);
       else if (carrying === "queen_food") drawCarriedFoodStack(size, [carryingFood]);
+      else if (carrying === "enemy_corpse") drawCarriedEnemyCorpse(size);
+      ctx.restore();
+    }
+
+    function drawCarriedEnemyCorpse(size) {
+      ctx.save();
+      ctx.translate(-size * 1.9, 0);
+      ctx.rotate(Math.PI * 0.5);
+      ctx.fillStyle = "#2b1d16";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.92, size * 0.48, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(126, 88, 56, 0.45)";
+      ctx.beginPath();
+      ctx.ellipse(-size * 0.12, -size * 0.16, size * 0.58, size * 0.18, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(12, 8, 6, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.72, 0);
+      ctx.lineTo(size * 0.72, 0);
+      ctx.stroke();
       ctx.restore();
     }
 

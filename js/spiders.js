@@ -1,6 +1,13 @@
     function updateSpiders(delta) {
       for (const spider of spiders) {
         if (!spider.alive) {
+          if (spider.corpse) {
+            if (spider.corpseCarrierId == null) {
+              spider.corpseTimer -= delta;
+              if (spider.corpseTimer <= 0) startEnemyRespawn(spider);
+            }
+            continue;
+          }
           spider.respawnTimer -= delta;
           if (spider.respawnTimer <= 0) respawnSpider(spider);
           continue;
@@ -88,18 +95,37 @@
     }
 
     function killSpider(spider) {
+      spider.homeRoomId = getEnemyHomeRoomId(spider);
       spider.alive = false;
+      spider.corpse = true;
+      spider.corpseTimer = 60;
+      spider.corpseCarrierId = null;
       spider.aggro = false;
       spider.targetMode = null;
       spider.targetAntId = null;
       spider.soldierFocusTimer = 0;
-      spider.respawnTimer = randomBetween(28, 46);
+      spider.respawnTimer = 0;
       if (defenseCall.targetSpiderId === spider.id) resetDefenseCall();
-      objectiveText.textContent = `Soldiers cleared a ${getEnemyLabel(spider)}. The area is safer for now.`;
+      objectiveText.textContent = `Soldiers cleared a ${getEnemyLabel(spider)}. Workers can recover the corpse for food.`;
+    }
+
+    function startEnemyRespawn(enemy) {
+      if (!enemy) return;
+      enemy.homeRoomId = getEnemyHomeRoomId(enemy);
+      enemy.corpse = false;
+      enemy.corpseTimer = 0;
+      enemy.corpseCarrierId = null;
+      enemy.roomId = enemy.homeRoomId;
+      enemy.respawnTimer = randomBetween(28, 46);
     }
 
     function respawnSpider(spider) {
       spider.alive = true;
+      spider.corpse = false;
+      spider.corpseTimer = 0;
+      spider.corpseCarrierId = null;
+      spider.homeRoomId = getEnemyHomeRoomId(spider);
+      spider.roomId = spider.homeRoomId;
       spider.x = spider.homeX;
       spider.y = spider.homeY;
       spider.angle = randomBetween(0, Math.PI * 2);
@@ -117,6 +143,18 @@
 
     function normalizeEnemyState(enemy) {
       if (!enemy) return;
+      if (typeof enemy.homeRoomId !== "string") enemy.homeRoomId = getEnemyHomeRoomId(enemy);
+      if (enemy.alive && enemy.roomId === "nest" && enemy.homeRoomId !== "nest") {
+        enemy.roomId = enemy.homeRoomId;
+        if (typeof enemy.homeX === "number") enemy.x = enemy.homeX;
+        if (typeof enemy.homeY === "number") enemy.y = enemy.homeY;
+        enemy.aggro = false;
+        enemy.targetMode = null;
+        enemy.targetAntId = null;
+      }
+      if (typeof enemy.corpse !== "boolean") enemy.corpse = false;
+      if (typeof enemy.corpseCarrierId === "undefined") enemy.corpseCarrierId = null;
+      if (typeof enemy.corpseTimer !== "number") enemy.corpseTimer = enemy.corpse ? 60 : 0;
       if (enemy.id === 3 && enemy.roomId === "garden") enemy.kind = "frog";
       if (enemy.kind === "frog") {
         enemy.canEnterPuddles = true;
@@ -137,6 +175,16 @@
         enemy.radius = enemy.radius || 20;
         enemy.speed = enemy.speed || 45;
       }
+    }
+
+    function getEnemyHomeRoomId(enemy) {
+      if (!enemy) return "overworld";
+      if (typeof enemy.homeRoomId === "string") return enemy.homeRoomId;
+      if (enemy.id === 1 || enemy.id === 4) return "overworld";
+      if (enemy.id === 2 || enemy.id === 6) return "sandpit";
+      if (enemy.id === 3 || enemy.id === 7) return "garden";
+      if (enemy.id === 5) return "patio";
+      return enemy.roomId || "overworld";
     }
 
     function updateFrogMovement(frog, delta) {
@@ -243,7 +291,11 @@
     function drawSpiders() {
       for (const spider of spiders) {
         const walk = performance.now() / 155 + spider.x * 0.02 + spider.y * 0.02;
-        if (!spider.alive || spider.roomId !== player.roomId) continue;
+        if (spider.roomId !== player.roomId) continue;
+        if (!spider.alive) {
+          if (spider.corpse && spider.corpseCarrierId == null) drawEnemyCorpse(spider, walk);
+          continue;
+        }
         if (spider.kind === "frog") {
           drawFrog(spider, walk);
           continue;
@@ -252,25 +304,41 @@
           drawBeetle(spider, walk);
           continue;
         }
-        ctx.save(); ctx.translate(spider.x, spider.y); ctx.rotate(spider.angle + Math.PI);
-        ctx.fillStyle = "rgba(0,0,0,0.23)"; ctx.beginPath(); ctx.ellipse(0, 20, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = "#2a1a14"; ctx.lineWidth = 4;
-        for (let i = -1; i <= 1; i++) {
-          const phase = walk + i * 1.25;
-          const topSwing = Math.sin(phase) * 8;
-          const bottomSwing = Math.sin(phase + Math.PI) * 8;
-          ctx.beginPath();
-          ctx.moveTo(i * 10, -6);
-          ctx.lineTo(i * 22 - 24 + topSwing, -24 - Math.abs(topSwing) * 0.35);
-          ctx.moveTo(i * 10, 6);
-          ctx.lineTo(i * 22 - 24 + bottomSwing, 24 + Math.abs(bottomSwing) * 0.35);
-          ctx.stroke();
-        }
-        ctx.fillStyle = "#4a2a22"; ctx.beginPath(); ctx.ellipse(8, 0, 25, 21, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#6d3d31"; ctx.beginPath(); ctx.ellipse(-18, 0, 19, 17, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#fff1c4"; ctx.beginPath(); ctx.arc(-27, -6, 3, 0, Math.PI * 2); ctx.arc(-27, 6, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+        drawSpiderEnemy(spider, walk);
       }
+    }
+
+    function drawEnemyCorpse(enemy, walk) {
+      const corpse = Object.assign({}, enemy, { x: 0, y: 0, angle: -Math.PI, jumpState: "idle" });
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
+      ctx.rotate(enemy.angle + Math.PI * 0.5);
+      ctx.scale(0.6, 0.6);
+      if (enemy.kind === "frog") drawFrog(corpse, walk);
+      else if (enemy.kind === "beetle") drawBeetle(corpse, walk);
+      else drawSpiderEnemy(corpse, walk);
+      ctx.restore();
+    }
+
+    function drawSpiderEnemy(spider, walk) {
+      ctx.save(); ctx.translate(spider.x, spider.y); ctx.rotate(spider.angle + Math.PI);
+      ctx.fillStyle = "rgba(0,0,0,0.23)"; ctx.beginPath(); ctx.ellipse(0, 20, 34, 13, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#2a1a14"; ctx.lineWidth = 4;
+      for (let i = -1; i <= 1; i++) {
+        const phase = walk + i * 1.25;
+        const topSwing = Math.sin(phase) * 8;
+        const bottomSwing = Math.sin(phase + Math.PI) * 8;
+        ctx.beginPath();
+        ctx.moveTo(i * 10, -6);
+        ctx.lineTo(i * 22 - 24 + topSwing, -24 - Math.abs(topSwing) * 0.35);
+        ctx.moveTo(i * 10, 6);
+        ctx.lineTo(i * 22 - 24 + bottomSwing, 24 + Math.abs(bottomSwing) * 0.35);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#4a2a22"; ctx.beginPath(); ctx.ellipse(8, 0, 25, 21, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#6d3d31"; ctx.beginPath(); ctx.ellipse(-18, 0, 19, 17, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff1c4"; ctx.beginPath(); ctx.arc(-27, -6, 3, 0, Math.PI * 2); ctx.arc(-27, 6, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
 
     function drawBeetle(beetle, walk) {
